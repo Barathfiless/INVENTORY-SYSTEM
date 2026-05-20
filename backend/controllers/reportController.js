@@ -27,6 +27,8 @@ export const getDashboardStats = async (_req, res) => {
     saleCount: sales[0]?.count || 0,
     orderCount: orders,
     lowStockCount,
+    profit: Math.max(0, (sales[0]?.total || 0) - (purchases[0]?.total || 0)),
+    loss: Math.max(0, (purchases[0]?.total || 0) - (sales[0]?.total || 0)),
   });
 };
 

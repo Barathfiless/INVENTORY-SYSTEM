@@ -32,7 +32,7 @@ export const getAllProductsAdmin = async (req, res) => {
 };
 
 export const getProductById = async (req, res) => {
-  const product = await Product.findById(req.params.id);
+  const product = await Product.findOne({ _id: req.params.id, isActive: true });
   if (!product) return res.status(404).json({ message: 'Product not found' });
   res.json(product);
 };

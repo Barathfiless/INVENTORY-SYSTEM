@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { TrendingUp, ShoppingCart, Package, Calendar, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { TrendingUp, ShoppingCart, Package, Calendar, Filter, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { reportAPI } from '../../api/api';
 import { formatCurrency, formatDate } from '../../utils/format';
 
@@ -8,7 +8,19 @@ export default function Reports() {
   const [report, setReport] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const filterRef = useRef(null);
   const [itemsPerPage] = useState(10);
+
+  // Close filter popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (filterRef.current && !filterRef.current.contains(e.target)) {
+        setShowFilters(false);
+      }
+    };
+    if (showFilters) document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilters]);
 
   const load = async () => {
     const params = {};
@@ -38,40 +50,57 @@ export default function Reports() {
     <section className="admin-page">
       {/* Filter Section */}
       <div className="page-header-actions">
-        <button 
-          className="btn-filter"
-          onClick={() => setShowFilters(!showFilters)}
-        >
-          <Filter size={18} />
-          {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </button>
-      </div>
+        <div className="filter-popover-wrap" ref={filterRef}>
+          <button 
+            className={`btn-filter${showFilters ? ' btn-filter--active' : ''}`}
+            onClick={() => setShowFilters(!showFilters)}
+          >
+            <Filter size={16} />
+            Filters
+          </button>
 
-      {showFilters && (
-        <div className="filter-card">
-          <form className="filter-form" onSubmit={(e) => { e.preventDefault(); load(); }}>
-            <div className="form-row">
-              <div className="form-group">
-                <label><Calendar size={16} /> From Date</label>
-                <input 
-                  type="date" 
-                  value={range.startDate} 
-                  onChange={(e) => setRange({ ...range, startDate: e.target.value })} 
-                />
+          {showFilters && (
+            <div className="filter-popover">
+              <div className="filter-popover-header">
+                <span>Date Range</span>
+                <button className="filter-popover-close" onClick={() => setShowFilters(false)} aria-label="Close filters">
+                  <X size={14} />
+                </button>
               </div>
-              <div className="form-group">
-                <label><Calendar size={16} /> To Date</label>
-                <input 
-                  type="date" 
-                  value={range.endDate} 
-                  onChange={(e) => setRange({ ...range, endDate: e.target.value })} 
-                />
-              </div>
+              <form onSubmit={(e) => { e.preventDefault(); load(); setShowFilters(false); }}>
+                <div className="filter-popover-fields">
+                  <div className="filter-popover-field">
+                    <label><Calendar size={13} /> From</label>
+                    <input 
+                      type="date" 
+                      value={range.startDate} 
+                      onChange={(e) => setRange({ ...range, startDate: e.target.value })} 
+                    />
+                  </div>
+                  <div className="filter-popover-field">
+                    <label><Calendar size={13} /> To</label>
+                    <input 
+                      type="date" 
+                      value={range.endDate} 
+                      onChange={(e) => setRange({ ...range, endDate: e.target.value })} 
+                    />
+                  </div>
+                </div>
+                <div className="filter-popover-actions">
+                  <button 
+                    type="button" 
+                    className="filter-popover-clear"
+                    onClick={() => { setRange({ startDate: '', endDate: '' }); }}
+                  >
+                    Clear
+                  </button>
+                  <button type="submit" className="filter-popover-apply">Apply</button>
+                </div>
+              </form>
             </div>
-            <button type="submit" className="btn-submit">Apply Filter</button>
-          </form>
+          )}
         </div>
-      )}
+      </div>
 
       {report && (
         <>

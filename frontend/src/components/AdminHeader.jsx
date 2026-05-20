@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, LogOut, User, Package, AlertTriangle, ShoppingCart, Menu } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, User, Package, AlertTriangle, ShoppingCart, Menu, Pencil, Store } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { reportAPI, orderAPI } from '../api/api';
 
@@ -23,7 +23,7 @@ function getInitials(name) {
     .toUpperCase();
 }
 
-export default function AdminHeader({ sidebarOpen, toggleSidebar }) {
+export default function AdminHeader({ sidebarOpen, toggleSidebar, storeName, onEditStore }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -129,6 +129,21 @@ export default function AdminHeader({ sidebarOpen, toggleSidebar }) {
         <div className="admin-topbar-title">
           <h2>{pageTitle}</h2>
         </div>
+      </div>
+
+      {/* Center — Store name */}
+      <div className="admin-topbar-center">
+        <Store size={15} className="topbar-store-icon" aria-hidden />
+        <span className="topbar-store-name">{storeName || 'My Store'}</span>
+        <button
+          type="button"
+          className="topbar-store-edit-btn"
+          onClick={onEditStore}
+          aria-label="Edit store name"
+          title="Edit store name"
+        >
+          <Pencil size={13} />
+        </button>
       </div>
 
       <div className="admin-topbar-actions">

@@ -105,7 +105,7 @@ export default function AdminOrders() {
                           <Eye size={16} />
                         </button>
                         <select 
-                          className="status-select"
+                          className={`status-select status-select--${o.status}`}
                           value={o.status} 
                           onChange={(e) => updateStatus(o._id, e.target.value)}
                         >

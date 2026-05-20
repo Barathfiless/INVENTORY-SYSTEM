@@ -11,7 +11,7 @@ export const getPurchases = async (req, res) => {
     if (endDate) filter.createdAt.$lte = new Date(endDate);
   }
   const purchases = await Purchase.find(filter)
-    .populate('product', 'name sku image category')
+    .populate('product', 'name sku image category isActive')
     .populate('createdBy', 'name')
     .sort({ createdAt: -1 });
   res.json(purchases);
