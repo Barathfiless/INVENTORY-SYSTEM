@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, LogOut, User, Package, AlertTriangle, ShoppingCart } from 'lucide-react';
+import { Bell, ChevronDown, LogOut, User, Package, AlertTriangle, ShoppingCart, Menu } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { reportAPI, orderAPI } from '../api/api';
 
@@ -10,7 +10,6 @@ const PAGE_TITLES = {
   '/admin/sales': 'Sales',
   '/admin/stock': 'Stock Available',
   '/admin/reports': 'Reports',
-  '/admin/products': 'Products',
   '/admin/orders': 'E-commerce Orders',
 };
 
@@ -24,7 +23,7 @@ function getInitials(name) {
     .toUpperCase();
 }
 
-export default function AdminHeader() {
+export default function AdminHeader({ sidebarOpen, toggleSidebar }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -118,8 +117,18 @@ export default function AdminHeader() {
 
   return (
     <header className="admin-topbar">
-      <div className="admin-topbar-title">
-        <h2>{pageTitle}</h2>
+      <div className="admin-topbar-left">
+        <button
+          type="button"
+          className="sidebar-toggle-btn"
+          onClick={toggleSidebar}
+          aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+        >
+          <Menu size={20} />
+        </button>
+        <div className="admin-topbar-title">
+          <h2>{pageTitle}</h2>
+        </div>
       </div>
 
       <div className="admin-topbar-actions">

@@ -34,11 +34,13 @@ export const productAPI = {
 export const purchaseAPI = {
   getAll: (params) => api.get('/purchases', { params }),
   create: (data) => api.post('/purchases', data),
+  delete: (id, config) => api.delete(`/purchases/${id}`, config),
 };
 
 export const saleAPI = {
   getAll: (params) => api.get('/sales', { params }),
   create: (data) => api.post('/sales', data),
+  delete: (id, config) => api.delete(`/sales/${id}`, config),
 };
 
 export const orderAPI = {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link, Outlet, useLocation, Navigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -18,19 +19,19 @@ const navItems = [
   { path: '/admin/sales', label: 'Sales', Icon: PackageMinus },
   { path: '/admin/stock', label: 'Stock Available', Icon: Boxes },
   { path: '/admin/reports', label: 'Reports', Icon: BarChart3 },
-  { path: '/admin/products', label: 'Products', Icon: Tag },
   { path: '/admin/orders', label: 'E-commerce Orders', Icon: ShoppingCart },
 ];
 
 export default function AdminLayout() {
   const { user, isAdmin } = useAuth();
   const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   if (!isAdmin) return <Navigate to={user ? '/shop' : '/'} replace />;
 
   return (
     <div className="admin-layout">
-      <aside className="admin-sidebar">
+      <aside className={`admin-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-brand">
           <Link to="/admin" className="brand-link">
             <Package size={22} strokeWidth={2.25} aria-hidden />
@@ -53,8 +54,8 @@ export default function AdminLayout() {
           })}
         </nav>
       </aside>
-      <div className="admin-content">
-        <AdminHeader />
+      <div className={`admin-content ${sidebarOpen ? '' : 'sidebar-closed'}`}>
+        <AdminHeader sidebarOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
         <main className="admin-main">
           <Outlet />
         </main>

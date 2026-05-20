@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import ShopHeader from '../../components/ShopHeader';
+import DeliveryMap from '../../components/DeliveryMap';
 import { orderAPI } from '../../api/api';
 import { formatCurrency, formatDate } from '../../utils/format';
 
@@ -42,6 +43,10 @@ export default function Orders() {
           <h1>Order #{order._id.slice(-8).toUpperCase()}</h1>
           <p>Placed on {formatDate(order.createdAt)}</p>
           <p>Status: <span className={`status ${order.status}`}>{order.status}</span></p>
+          
+          {/* Animated Interactive Map Tracker */}
+          <DeliveryMap order={order} />
+
           <h3>Items</h3>
           <ul>
             {order.orderItems.map((item, idx) => (

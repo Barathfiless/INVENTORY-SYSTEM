@@ -1,5 +1,6 @@
 import Purchase from '../models/Purchase.js';
 import Product from '../models/Product.js';
+import User from '../models/User.js';
 
 export const getPurchases = async (req, res) => {
   const { startDate, endDate } = req.query;
@@ -10,7 +11,7 @@ export const getPurchases = async (req, res) => {
     if (endDate) filter.createdAt.$lte = new Date(endDate);
   }
   const purchases = await Purchase.find(filter)
-    .populate('product', 'name sku')
+    .populate('product', 'name sku image category')
     .populate('createdBy', 'name')
     .sort({ createdAt: -1 });
   res.json(purchases);
@@ -41,4 +42,44 @@ export const createPurchase = async (req, res) => {
     .populate('product', 'name sku stock')
     .populate('createdBy', 'name');
   res.status(201).json(populated);
+};
+
+export const deletePurchase = async (req, res) => {
+  try {
+    const { password } = req.body;
+    
+    // Verify password
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
+    }
+
+    // Get the current user and check password
+    const user = await User.findById(req.user._id).select('+password');
+    const isPasswordValid = await user.matchPassword(password);
+    
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid password' });
+    }
+
+    // Find and delete the purchase
+    const purchase = await Purchase.findById(req.params.id);
+    if (!purchase) {
+      return res.status(404).json({ message: 'Purchase not found' });
+    }
+
+    // Update product stock (reduce by purchase quantity)
+    const product = await Product.findById(purchase.product);
+    if (product) {
+      product.stock -= purchase.quantity;
+      if (product.stock < 0) product.stock = 0; // Prevent negative stock
+      await product.save();
+    }
+
+    // Delete the purchase
+    await Purchase.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'Purchase deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
 };

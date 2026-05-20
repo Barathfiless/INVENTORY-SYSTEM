@@ -71,8 +71,6 @@ export default function Products() {
 
   return (
     <section className="admin-page">
-      <h1>Product Catalog</h1>
-      <p className="subtitle">Manage products for inventory and e-commerce</p>
       {message && <p className="alert success">{message}</p>}
       <form className="admin-form card" onSubmit={handleSubmit}>
         <h3>{editing ? 'Edit Product' : 'Add Product'}</h3>

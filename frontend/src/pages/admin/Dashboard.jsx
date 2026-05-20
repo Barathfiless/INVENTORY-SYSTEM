@@ -39,8 +39,6 @@ export default function Dashboard() {
   return (
     <section className="admin-page">
       <header className="admin-page-header">
-        <h1>Inventory Dashboard</h1>
-        <p className="subtitle">Overview of your stock and business performance</p>
       </header>
       <ul className="stats-grid">
         {STAT_CONFIG.map(({ key, label, Icon, tone, format, warn }) => {
