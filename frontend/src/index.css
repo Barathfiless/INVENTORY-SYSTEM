@@ -41,6 +41,7 @@
   --shadow-md: 0 4px 4px rgba(0, 0, 0, 0.02), 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.08);
   --border-light: #e1e3e5;
+  --table-row-hover-bg: #fafafa;
   --transition-normal: 0.15s ease;
   --glass-bg: rgba(255, 255, 255, 0.9);
   --glass-border: rgba(0, 0, 0, 0.08);
@@ -2497,7 +2498,7 @@ a:hover {
 }
 
 .purchases-table tbody tr:hover {
-  background: #fafafa;
+  background: var(--table-row-hover-bg, #fafafa);
   transform: none;
   box-shadow: none;
 }
@@ -2675,14 +2676,14 @@ a:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #ffffff !important;
-  color: var(--text-main) !important;
+  background: var(--qty-badge-bg, #ffffff) !important;
+  color: var(--qty-badge-color, var(--text-main)) !important;
   padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm) !important;
   font-weight: 500;
   font-size: 0.8rem;
   min-width: 30px;
-  border: 1px solid var(--border-light) !important;
+  border: 1px solid var(--qty-badge-border, var(--border-light)) !important;
 }
 
 .cost-cell {
@@ -3952,6 +3953,7 @@ a:hover {
 .order-items-table {
   width: 100%;
   border-collapse: collapse;
+  color: var(--text-main);
 }
 
 .order-items-table th,
@@ -5555,6 +5557,114 @@ a:hover {
   color: #d93838;
   border-color: #d93838;
   background: rgba(217, 56, 56, 0.05);
+}
+
+/* Scoped Dark Theme variables for Admin Portal */
+.admin-layout.dark-theme {
+  color-scheme: dark;
+  --bg-main: #000000; /* Pure black background */
+  --bg-surface: #0a0a0a; /* Deep charcoal card surface */
+  --bg-sidebar: #0a0a0a;
+  --bg-sidebar-hover: #161617;
+  
+  --text-main: #f5f5f7; /* High contrast off-white text */
+  --text-muted: #86868b; /* Apple/Vercel muted grey text */
+  
+  --border-light: #1f1f1f; /* Very dark border */
+  --border-medium: #333333;
+  
+  --glass-bg: rgba(10, 10, 10, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.05);
+
+  --admin-accent-soft: rgba(0, 128, 96, 0.12);
+
+  --qty-badge-bg: #161617;
+  --qty-badge-color: #ffffff;
+  --qty-badge-border: #2d2d2d;
+  --table-row-hover-bg: #161617;
+}
+
+/* Scoped element adjustments in Dark Mode */
+.admin-layout.dark-theme .vercel-separator {
+  color: #1f1f1f;
+}
+
+.admin-layout.dark-theme .sn-overlay {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+.admin-layout.dark-theme .notification-row.unread .notification-actions {
+  background: #0d1210; /* solid dark green-tinted background overlay */
+  box-shadow: -8px 0 8px -4px #0d1210;
+}
+
+.admin-layout.dark-theme .notification-row.unread:hover .notification-actions {
+  background: #111a16;
+  box-shadow: -8px 0 8px -4px #111a16;
+}
+
+.admin-layout.dark-theme .notification-row.read:hover .notification-actions {
+  background: var(--bg-main);
+  box-shadow: -8px 0 8px -4px var(--bg-main);
+}
+
+.admin-layout.dark-theme .category-badge-blue {
+  background: rgba(92, 106, 196, 0.15) !important;
+  color: #8fa0ff !important;
+}
+
+/* Inputs and interactive elements in Dark Mode */
+.admin-layout.dark-theme input::placeholder,
+.admin-layout.dark-theme select::placeholder,
+.admin-layout.dark-theme textarea::placeholder {
+  color: #475569;
+}
+
+.admin-layout.dark-theme .legend-dot.sales {
+  background: #008060 !important;
+}
+
+.admin-layout.dark-theme .legend-dot.purchases {
+  background: #5c6ac4 !important;
+}
+
+.admin-layout.dark-theme ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+.admin-layout.dark-theme ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+.admin-layout.dark-theme tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+/* Style for map controls in Dark Mode */
+.admin-layout.dark-theme .map-zoom-controls {
+  background: rgba(10, 10, 10, 0.9);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Custom typography overrides for specific headers and alerts in Dark Mode */
+.admin-layout.dark-theme .admin-page-header h1 {
+  color: #ffffff !important;
+}
+
+.admin-layout.dark-theme .alert.warn {
+  background: #2b1c00 !important;
+  color: #ffffff !important;
+  border: 1px solid #5c4000 !important;
+}
+
+.admin-layout.dark-theme .alert.warn strong {
+  color: #ffffff !important;
+}
+
+.admin-layout.dark-theme .qty-badge {
+  background: #161617 !important;
+  color: #ffffff !important;
+  border-color: #2d2d2d !important;
 }
 
 

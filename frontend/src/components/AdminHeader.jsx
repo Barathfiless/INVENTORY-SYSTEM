@@ -17,7 +17,9 @@ import {
   Store,
   Check,
   Trash2,
-  Clock
+  Clock,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { reportAPI, orderAPI, productAPI } from '../api/api';
@@ -55,7 +57,7 @@ function formatTimeAgo(dateStr) {
   return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
 }
 
-export default function AdminHeader({ storeName, onEditStore }) {
+export default function AdminHeader({ storeName, onEditStore, theme, onToggleTheme }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -299,6 +301,16 @@ export default function AdminHeader({ storeName, onEditStore }) {
         </div>
 
         <div className="admin-topbar-actions">
+          <button
+            type="button"
+            className="admin-topbar-btn theme-toggle-btn"
+            onClick={onToggleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
           <div className="admin-dropdown-wrap" ref={notifRef}>
             <button
               type="button"

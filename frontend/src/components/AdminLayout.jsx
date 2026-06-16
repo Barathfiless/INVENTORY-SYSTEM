@@ -23,6 +23,19 @@ export default function AdminLayout() {
     () => localStorage.getItem(STORE_NAME_KEY) || 'My Store'
   );
 
+  // Theme state for Admin portal
+  const [theme, setTheme] = useState(
+    () => localStorage.getItem('stocksync_admin_theme') || 'light'
+  );
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'light' ? 'dark' : 'light';
+      localStorage.setItem('stocksync_admin_theme', next);
+      return next;
+    });
+  };
+
   // Modal state
   const [modalStep, setModalStep] = useState(null); // null | 'password' | 'edit'
   const [password, setPassword] = useState('');
@@ -84,9 +97,14 @@ export default function AdminLayout() {
   };
 
   return (
-    <div className="admin-layout">
+    <div className={`admin-layout ${theme === 'dark' ? 'dark-theme' : ''}`}>
       <div className="admin-content">
-        <AdminHeader storeName={storeName} onEditStore={openModal} />
+        <AdminHeader
+          storeName={storeName}
+          onEditStore={openModal}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+        />
         <main className="admin-main">
           <Outlet />
         </main>
