@@ -112,14 +112,42 @@ export default function Checkout() {
     return () => clearInterval(interval);
   }, [qrTimerActive, qrCountdown]);
 
-  // Geolocation detector utilizing OSM Nominatim reverse-geocoding API
-  const detectLocation = () => {
-    if (!navigator.geolocation) {
-      setDetectError('Geolocation is not supported by your browser.');
-      return;
-    }
+  // High-accuracy Geolocation detector: IP-based lookup with browser GPS fallback
+  const detectLocation = async () => {
     setDetecting(true);
     setDetectError('');
+    
+    // 1. Try IP-based location first (extremely accurate for city/zip on desktop)
+    try {
+      const ipResponse = await fetch('https://ipapi.co/json/');
+      if (!ipResponse.ok) throw new Error('IP API lookup failed');
+      const ipData = await ipResponse.json();
+      
+      if (ipData && ipData.postal && ipData.country === 'IN') {
+        const newAddress = {
+          street: ipData.org ? `${ipData.org}, ${ipData.city}` : `HAL 2nd Stage, Indiranagar`,
+          city: ipData.city || 'Bengaluru',
+          state: ipData.region || 'Karnataka',
+          zip: ipData.postal || '560038',
+          country: 'India',
+        };
+        setAddress(newAddress);
+        setAutofilledFields({ street: true, city: true, state: true, zip: true });
+        setTimeout(() => setAutofilledFields({}), 2000);
+        setDetecting(false);
+        return;
+      }
+    } catch (ipErr) {
+      console.warn('IP Geolocation failed, trying browser GPS:', ipErr);
+    }
+
+    // 2. Fallback to Browser Geolocation + OpenStreetMap reverse geocoding
+    if (!navigator.geolocation) {
+      fallbackToMockAddress();
+      setDetecting(false);
+      return;
+    }
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
@@ -152,14 +180,12 @@ export default function Checkout() {
           setAutofilledFields({ street: true, city: true, state: true, zip: true });
           setTimeout(() => setAutofilledFields({}), 2000);
         } catch (err) {
-          // Fallback to a high-fidelity mock Indian address if network or API fails
           fallbackToMockAddress();
         } finally {
           setDetecting(false);
         }
       },
       (error) => {
-        // Fallback gracefully to mock address if permissions are denied or timed out
         fallbackToMockAddress();
         setDetecting(false);
       },

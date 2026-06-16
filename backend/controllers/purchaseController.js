@@ -4,7 +4,7 @@ import User from '../models/User.js';
 
 export const getPurchases = async (req, res) => {
   const { startDate, endDate } = req.query;
-  const filter = {};
+  const filter = { createdBy: req.user._id };
   if (startDate || endDate) {
     filter.createdAt = {};
     if (startDate) filter.createdAt.$gte = new Date(startDate);
@@ -19,8 +19,8 @@ export const getPurchases = async (req, res) => {
 
 export const createPurchase = async (req, res) => {
   const { productId, quantity, unitCost, supplier, invoiceNumber, notes } = req.body;
-  const product = await Product.findById(productId);
-  if (!product) return res.status(404).json({ message: 'Product not found' });
+  const product = await Product.findOne({ _id: productId, createdBy: req.user._id });
+  if (!product) return res.status(404).json({ message: 'Product not found or not authorized' });
 
   const totalCost = quantity * unitCost;
   const purchase = await Purchase.create({
@@ -62,13 +62,13 @@ export const deletePurchase = async (req, res) => {
     }
 
     // Find and delete the purchase
-    const purchase = await Purchase.findById(req.params.id);
+    const purchase = await Purchase.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!purchase) {
-      return res.status(404).json({ message: 'Purchase not found' });
+      return res.status(404).json({ message: 'Purchase not found or not authorized' });
     }
 
     // Update product stock (reduce by purchase quantity)
-    const product = await Product.findById(purchase.product);
+    const product = await Product.findOne({ _id: purchase.product, createdBy: req.user._id });
     if (product) {
       product.stock -= purchase.quantity;
       if (product.stock < 0) product.stock = 0; // Prevent negative stock
@@ -76,7 +76,7 @@ export const deletePurchase = async (req, res) => {
     }
 
     // Delete the purchase
-    await Purchase.findByIdAndDelete(req.params.id);
+    await Purchase.findOneAndDelete({ _id: req.params.id, createdBy: req.user._id });
 
     res.json({ message: 'Purchase deleted successfully' });
   } catch (error) {

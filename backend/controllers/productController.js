@@ -4,7 +4,13 @@ export const getProducts = async (req, res) => {
   const { category, search, featured, minPrice, maxPrice, sort } = req.query;
   const filter = { isActive: true };
   if (category && category !== 'all') filter.category = new RegExp(category, 'i');
-  if (featured === 'true') filter.featured = true;
+  if (featured === 'true') {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+    filter.createdAt = { $gte: startOfToday, $lte: endOfToday };
+  }
   if (search) {
     filter.$or = [
       { name: new RegExp(search, 'i') },
@@ -27,7 +33,7 @@ export const getProducts = async (req, res) => {
 };
 
 export const getAllProductsAdmin = async (req, res) => {
-  const products = await Product.find().sort({ createdAt: -1 });
+  const products = await Product.find({ createdBy: req.user._id }).sort({ createdAt: -1 });
   res.json(products);
 };
 
@@ -38,22 +44,27 @@ export const getProductById = async (req, res) => {
 };
 
 export const createProduct = async (req, res) => {
-  const product = await Product.create(req.body);
+  const productData = { ...req.body, createdBy: req.user._id };
+  const product = await Product.create(productData);
   res.status(201).json(product);
 };
 
 export const updateProduct = async (req, res) => {
-  const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
-    new: true,
-    runValidators: true,
-  });
-  if (!product) return res.status(404).json({ message: 'Product not found' });
+  const product = await Product.findOneAndUpdate(
+    { _id: req.params.id, createdBy: req.user._id },
+    req.body,
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+  if (!product) return res.status(404).json({ message: 'Product not found or not authorized' });
   res.json(product);
 };
 
 export const deleteProduct = async (req, res) => {
-  const product = await Product.findByIdAndDelete(req.params.id);
-  if (!product) return res.status(404).json({ message: 'Product not found' });
+  const product = await Product.findOneAndDelete({ _id: req.params.id, createdBy: req.user._id });
+  if (!product) return res.status(404).json({ message: 'Product not found or not authorized' });
   res.json({ message: 'Product removed' });
 };
 
@@ -62,8 +73,8 @@ export const getCategories = async (_req, res) => {
   res.json(categories);
 };
 
-export const getStockSummary = async (_req, res) => {
-  const products = await Product.find().select('name sku stock price costPrice lowStockThreshold category');
+export const getStockSummary = async (req, res) => {
+  const products = await Product.find({ createdBy: req.user._id }).select('name sku stock price costPrice lowStockThreshold category');
   const totalProducts = products.length;
   const totalStock = products.reduce((sum, p) => sum + p.stock, 0);
   const totalValue = products.reduce((sum, p) => sum + p.stock * p.costPrice, 0);

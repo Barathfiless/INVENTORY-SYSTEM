@@ -4,12 +4,25 @@ import ShopHeader from '../../components/ShopHeader';
 import ProductCard from '../../components/ProductCard';
 import { productAPI } from '../../api/api';
 import { useCart } from '../../context/CartContext';
+import { ChevronDown } from 'lucide-react';
 
 export default function Home() {
   const [searchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const { addToCart } = useCart();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const sortOptions = [
+    { value: '', label: 'Sort: Featured' },
+    { value: 'price-asc', label: 'Price: Low to High' },
+    { value: 'price-desc', label: 'Price: High to Low' },
+    { value: 'rating', label: 'Avg. Rating' }
+  ];
+
+  const currentSort = searchParams.get('sort') || '';
+  const activeOption = sortOptions.find(opt => opt.value === currentSort) || sortOptions[0];
+  const isFiltering = !!(searchParams.get('search') || searchParams.get('category') || searchParams.get('featured'));
 
   useEffect(() => {
     const load = async () => {
@@ -30,44 +43,79 @@ export default function Home() {
   return (
     <div className="shop-page">
       <ShopHeader />
-      <div className="hero-banner">
-        <div className="hero-content">
-          <h1>Welcome to StockSync</h1>
-          <p>Your one-stop shop — electronics, fashion, sports & more</p>
-          <a href="/shop?featured=true" className="btn-hero">Shop Today&apos;s Deals</a>
+      {!isFiltering && (
+        <div className="hero-banner">
+          <div className="hero-content">
+            <h1>Welcome to StockSync</h1>
+            <p>Your one-stop shop — electronics, fashion, sports & more</p>
+            <a href="/shop?featured=true" className="btn-hero">Shop Today&apos;s Deals</a>
+          </div>
         </div>
-      </div>
-      <div className="shop-container">
-        <aside className="filters-sidebar">
-          <h3>Filter by</h3>
-          <a href="/shop">All Products</a>
-          <a href="/shop?category=Electronics">Electronics</a>
-          <a href="/shop?category=Fashion">Fashion</a>
-          <a href="/shop?category=Sports">Sports</a>
-          <a href="/shop?category=Home">Home</a>
-          <a href="/shop?category=Accessories">Accessories</a>
-          <a href="/shop?featured=true">Deals</a>
-        </aside>
+      )}
+      <div className={`shop-container ${isFiltering ? 'full-width' : ''}`}>
+        {!isFiltering && (
+          <aside className="filters-sidebar">
+            <h3>Filter by</h3>
+            <a href="/shop">All Products</a>
+            <a href="/shop?category=Electronics">Electronics</a>
+            <a href="/shop?category=Fashion">Fashion</a>
+            <a href="/shop?category=Sports">Sports</a>
+            <a href="/shop?category=Home">Home</a>
+            <a href="/shop?category=Accessories">Accessories</a>
+            <a href="/shop?featured=true">Deals</a>
+          </aside>
+        )}
         <section className="products-section">
           <div className="products-header">
             <h2>
-              {searchParams.get('search')
-                ? `Results for "${searchParams.get('search')}"`
-                : searchParams.get('category') || 'All Products'}
+              {isFiltering ? (
+                <span>
+                  {products.length > 0 ? `1-${products.length}` : '0'} of {products.length} results for{' '}
+                  <span className="search-query-highlight">
+                    "{searchParams.get('search') || searchParams.get('category') || 'Deals'}"
+                  </span>
+                </span>
+              ) : (
+                'All Products'
+              )}
             </h2>
-            <select
-              onChange={(e) => {
-                const url = new URL(window.location);
-                url.searchParams.set('sort', e.target.value);
-                window.location = url;
-              }}
-              defaultValue={searchParams.get('sort') || ''}
-            >
-              <option value="">Sort: Featured</option>
-              <option value="price-asc">Price: Low to High</option>
-              <option value="price-desc">Price: High to Low</option>
-              <option value="rating">Avg. Rating</option>
-            </select>
+            
+            <div className="custom-select-container">
+              <button 
+                type="button" 
+                className="custom-select-trigger" 
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+              >
+                <span>{activeOption.label}</span>
+                <ChevronDown size={16} className={`chevron-icon ${dropdownOpen ? 'rotated' : ''}`} />
+              </button>
+              
+              {dropdownOpen && (
+                <>
+                  <div className="custom-select-backdrop" onClick={() => setDropdownOpen(false)} />
+                  <ul className="custom-select-options">
+                    {sortOptions.map((opt) => (
+                      <li 
+                        key={opt.value}
+                        className={`custom-select-option ${opt.value === currentSort ? 'active' : ''}`}
+                        onClick={() => {
+                          const url = new URL(window.location);
+                          if (opt.value) {
+                            url.searchParams.set('sort', opt.value);
+                          } else {
+                            url.searchParams.delete('sort');
+                          }
+                          window.location = url;
+                          setDropdownOpen(false);
+                        }}
+                      >
+                        {opt.label}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
           </div>
           {loading ? (
             <p className="loading-text">Loading products...</p>
@@ -82,9 +130,6 @@ export default function Home() {
           )}
         </section>
       </div>
-      <footer className="shop-footer">
-        <p>© 2026 StockSync — Inventory & E-commerce Platform</p>
-      </footer>
     </div>
   );
 }

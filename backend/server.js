@@ -11,6 +11,8 @@ import purchaseRoutes from './routes/purchaseRoutes.js';
 import saleRoutes from './routes/saleRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
+import Product from './models/Product.js';
+import User from './models/User.js';
 
 dotenv.config();
 
@@ -42,7 +44,22 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 5000;
 
 connectDB()
-  .then(() => {
+  .then(async () => {
+    try {
+      const admin = await User.findOne({ role: 'admin' });
+      if (admin) {
+        const result = await Product.updateMany(
+          { createdBy: { $exists: false } },
+          { $set: { createdBy: admin._id } }
+        );
+        if (result.modifiedCount > 0) {
+          console.log(`Migrated ${result.modifiedCount} products to default admin: ${admin.email}`);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to run product owner migration:', err);
+    }
+
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => {

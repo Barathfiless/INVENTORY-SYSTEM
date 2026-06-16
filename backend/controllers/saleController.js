@@ -3,7 +3,7 @@ import Product from '../models/Product.js';
 
 export const getSales = async (req, res) => {
   const { startDate, endDate, channel } = req.query;
-  const filter = {};
+  const filter = { createdBy: req.user._id };
   if (channel) filter.channel = channel;
   if (startDate || endDate) {
     filter.createdAt = {};
@@ -19,8 +19,8 @@ export const getSales = async (req, res) => {
 
 export const createSale = async (req, res) => {
   const { productId, quantity, unitPrice, customerName, notes } = req.body;
-  const product = await Product.findById(productId);
-  if (!product) return res.status(404).json({ message: 'Product not found' });
+  const product = await Product.findOne({ _id: productId, createdBy: req.user._id });
+  if (!product) return res.status(404).json({ message: 'Product not found or not authorized' });
   if (product.stock < quantity) {
     return res.status(400).json({ message: `Insufficient stock. Available: ${product.stock}` });
   }

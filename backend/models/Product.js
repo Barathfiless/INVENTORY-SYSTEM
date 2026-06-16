@@ -16,6 +16,7 @@ const productSchema = new mongoose.Schema(
     reviewCount: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
     featured: { type: Boolean, default: false },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }
 );

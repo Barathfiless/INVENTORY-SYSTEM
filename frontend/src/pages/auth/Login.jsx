@@ -84,7 +84,7 @@ export default function Login() {
             autoComplete="current-password"
             required
           />
-          <button type="submit" className="btn-primary" disabled={loading}>
+          <button type="submit" className="btn-primary full" disabled={loading}>
             {loading ? 'Signing in...' : `Sign In to ${selectedRole?.portal}`}
           </button>
         </form>

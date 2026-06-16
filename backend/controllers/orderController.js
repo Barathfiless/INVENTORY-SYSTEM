@@ -61,7 +61,7 @@ export const createOrder = async (req, res) => {
       totalAmount: item.price * item.quantity,
       channel: 'ecommerce',
       order: order._id,
-      createdBy: req.user._id,
+      createdBy: product.createdBy,
     });
   }
 
@@ -80,12 +80,58 @@ export const getOrderById = async (req, res) => {
   if (req.user.role !== 'admin' && order.user._id.toString() !== req.user._id.toString()) {
     return res.status(403).json({ message: 'Not authorized' });
   }
+
+  if (req.user.role === 'admin') {
+    const myProducts = await Product.find({
+      _id: { $in: order.orderItems.map(item => item.product) },
+      createdBy: req.user._id
+    }).select('_id');
+    const myProductIds = myProducts.map(p => p._id.toString());
+    
+    if (myProductIds.length === 0) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    
+    const orderObj = order.toObject();
+    orderObj.orderItems = orderObj.orderItems.filter(item => 
+      myProductIds.includes(item.product.toString())
+    );
+    const subtotal = orderObj.orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    orderObj.itemsPrice = subtotal;
+    const prices = calcPrices(orderObj.orderItems);
+    orderObj.shippingPrice = prices.shippingPrice;
+    orderObj.taxPrice = prices.taxPrice;
+    orderObj.totalPrice = prices.totalPrice;
+
+    return res.json(orderObj);
+  }
+
   res.json(order);
 };
 
-export const getAllOrders = async (_req, res) => {
-  const orders = await Order.find().populate('user', 'name email').sort({ createdAt: -1 });
-  res.json(orders);
+export const getAllOrders = async (req, res) => {
+  const myProducts = await Product.find({ createdBy: req.user._id }).select('_id');
+  const myProductIds = myProducts.map(p => p._id.toString());
+
+  const orders = await Order.find({ 'orderItems.product': { $in: myProductIds } })
+    .populate('user', 'name email')
+    .sort({ createdAt: -1 });
+
+  const filteredOrders = orders.map(order => {
+    const orderObj = order.toObject();
+    orderObj.orderItems = orderObj.orderItems.filter(item => 
+      myProductIds.includes(item.product.toString())
+    );
+    const subtotal = orderObj.orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    orderObj.itemsPrice = subtotal;
+    const prices = calcPrices(orderObj.orderItems);
+    orderObj.shippingPrice = prices.shippingPrice;
+    orderObj.taxPrice = prices.taxPrice;
+    orderObj.totalPrice = prices.totalPrice;
+    return orderObj;
+  });
+
+  res.json(filteredOrders);
 };
 
 export const updateOrderStatus = async (req, res) => {

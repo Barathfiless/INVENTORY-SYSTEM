@@ -100,7 +100,7 @@ export default function Register() {
             autoComplete="new-password"
             required
           />
-          <button type="submit" className="btn-primary" disabled={loading}>
+          <button type="submit" className="btn-primary full" disabled={loading}>
             {loading ? 'Creating...' : `Register for ${selectedRole?.portal}`}
           </button>
         </form>
