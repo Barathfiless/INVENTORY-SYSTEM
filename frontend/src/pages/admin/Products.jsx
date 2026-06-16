@@ -96,20 +96,22 @@ export default function Products() {
         <button type="submit" className="btn-primary">{editing ? 'Update' : 'Create'}</button>
         {editing && <button type="button" className="btn-secondary" onClick={() => { setEditing(null); setForm(emptyProduct); }}>Cancel</button>}
       </form>
-      <table className="data-table">
-        <thead><tr><th>Name</th><th>SKU</th><th>Stock</th><th>Price</th><th>Actions</th></tr></thead>
-        <tbody>
-          {products.map((p) => (
-            <tr key={p._id}>
-              <td>{p.name}</td><td>{p.sku}</td><td>{p.stock}</td><td>{formatCurrency(p.price)}</td>
-              <td>
-                <button type="button" onClick={() => startEdit(p)}>Edit</button>
-                <button type="button" className="btn-danger" onClick={() => handleDelete(p._id)}>Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="table-container">
+        <table className="data-table purchases-table">
+          <thead><tr><th>Name</th><th>SKU</th><th>Stock</th><th>Price</th><th>Actions</th></tr></thead>
+          <tbody>
+            {products.map((p) => (
+              <tr key={p._id}>
+                <td>{p.name}</td><td>{p.sku}</td><td>{p.stock}</td><td>{formatCurrency(p.price)}</td>
+                <td>
+                  <button type="button" onClick={() => startEdit(p)}>Edit</button>
+                  <button type="button" className="btn-danger" onClick={() => handleDelete(p._id)}>Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }

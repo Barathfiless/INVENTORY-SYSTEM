@@ -45,6 +45,8 @@ export const createOrder = async (req, res) => {
     orderItems: enrichedItems,
     shippingAddress,
     paymentMethod: paymentMethod || 'COD',
+    isPaid: paymentMethod === 'UPI',
+    paidAt: paymentMethod === 'UPI' ? Date.now() : undefined,
     ...prices,
   });
 
@@ -102,3 +104,37 @@ export const updateOrderStatus = async (req, res) => {
   const updated = await order.save();
   res.json(updated);
 };
+
+export const cancelMyOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    // Ownership check
+    if (order.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized to cancel this order' });
+    }
+
+    // Status check
+    if (order.status !== 'pending' && order.status !== 'processing') {
+      return res.status(400).json({ message: 'Order cannot be cancelled. Already shipped or delivered.' });
+    }
+
+    order.status = 'cancelled';
+
+    // Revert product stocks
+    for (const item of order.orderItems) {
+      const product = await Product.findById(item.product);
+      if (product) {
+        product.stock += item.quantity;
+        await product.save();
+      }
+    }
+
+    const updated = await order.save();
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ message: err.message || 'Cancellation failed' });
+  }
+};
+

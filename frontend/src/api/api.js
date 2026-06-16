@@ -48,6 +48,7 @@ export const orderAPI = {
   getMy: () => api.get('/orders/my'),
   getById: (id) => api.get(`/orders/${id}`),
   getAll: () => api.get('/orders'),
+  cancel: (id) => api.put(`/orders/${id}/cancel`),
   updateStatus: (id, data) => api.put(`/orders/${id}/status`, data),
 };
 
