@@ -6635,6 +6635,196 @@ a:hover {
   border: none !important;
 }
 
+/* ── Mobile Layout Fixes (both portals) ── */
+
+/* 1. Customer order details grid responsive layout */
+.customer-order-details-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .customer-order-details-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+/* 2. Cart item image wrapper responsive style */
+.cart-item-image-wrap {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  width: 100px;
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.cart-item-image-wrap img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+@media (max-width: 768px) {
+  .cart-item-image-wrap {
+    width: 80px;
+    height: 80px;
+  }
+}
+
+/* 3. Delivery tracker grid responsive structure & map position */
+.delivery-tracker-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 768px) {
+  .delivery-tracker-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+  .delivery-tracker-left-col {
+    order: 2;
+  }
+  .delivery-tracker-map-col {
+    order: 1;
+  }
+}
+
+.delivery-milestone-node-row {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+}
+
+.delivery-milestone-node-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 18%;
+  text-align: center;
+}
+
+.delivery-milestone-label {
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 480px) {
+  .delivery-milestone-label {
+    font-size: 0.62rem;
+  }
+}
+
+/* 4. Mobile location bar in Shop Header */
+.mobile-location-bar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-location-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.45rem 1rem;
+    background: #111827;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 0.8rem;
+    color: #ccc;
+    cursor: pointer;
+  }
+  .mobile-location-text {
+    font-weight: 500;
+  }
+}
+
+/* 5. Swipeable horizontal filter categories for mobile */
+@media (max-width: 768px) {
+  .filters-sidebar {
+    position: static;
+    padding: 0.5rem 1rem !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 0.5rem !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  .filters-sidebar::-webkit-scrollbar {
+    display: none !important;
+  }
+  .filters-sidebar h3 {
+    display: none !important;
+  }
+}
+
+/* 6. UPI App Grid 2-columns collapse for small devices */
+@media (max-width: 480px) {
+  .upi-app-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* 7. Product Detail Image Gallery responsive placement */
+@media (max-width: 768px) {
+  .amazon-detail-gallery {
+    flex-direction: column-reverse !important;
+    gap: 0.75rem !important;
+  }
+  .thumbnail-strip {
+    flex-direction: row !important;
+    justify-content: center !important;
+  }
+}
+
+/* 8. Admin topbar left-alignment overlap fix */
+@media (max-width: 768px) {
+  .admin-topbar-left {
+    position: static !important;
+    transform: none !important;
+    left: auto !important;
+    max-width: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 500px) {
+  .vercel-separator,
+  .admin-store-select {
+    display: none !important;
+  }
+}
+
+/* 9. Admin table toolbar collapse */
+@media (max-width: 500px) {
+  .table-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.75rem !important;
+    padding: 0.75rem !important;
+  }
+  .table-toolbar-left {
+    justify-content: space-between !important;
+  }
+  .search-wrapper {
+    max-width: 100% !important;
+  }
+  .table-toolbar-actions {
+    justify-content: flex-end !important;
+  }
+}
+
 
 
 

@@ -94,8 +94,8 @@ export default function Cart() {
             <ul className="cart-items">
               {cartItems.map((item) => (
                 <li key={item._id} className="cart-item">
-                  <div style={cartStyles.imageWrap}>
-                    <img src={item.image} alt={item.name} style={cartStyles.image} />
+                  <div className="cart-item-image-wrap">
+                    <img src={item.image} alt={item.name} />
                   </div>
                   
                   <article className="cart-item-info">

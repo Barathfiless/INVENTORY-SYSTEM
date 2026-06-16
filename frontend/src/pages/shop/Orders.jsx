@@ -106,7 +106,7 @@ export default function Orders() {
           {/* Swiggy-Style Live Delivery Map Tracker */}
           <DeliveryMap order={order} />
 
-          <div style={detailStyles.detailsGrid}>
+          <div className="customer-order-details-grid">
             <div style={detailStyles.card}>
               <h3 style={detailStyles.cardTitle}>Product Summary</h3>
               <ul style={detailStyles.itemsList}>

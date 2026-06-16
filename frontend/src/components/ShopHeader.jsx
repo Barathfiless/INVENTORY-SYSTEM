@@ -165,6 +165,12 @@ export default function ShopHeader() {
           </button>
         </form>
 
+        {/* Mobile location bar — visible only on mobile viewports */}
+        <div className="mobile-location-bar" onClick={handleLocationClick} title="Click to change delivery pincode">
+          <MapPin size={14} className="location-icon" />
+          <span className="mobile-location-text">Delivering to {city} {pincode} - Update</span>
+        </div>
+
         <nav className={`shop-nav${menuOpen ? ' shop-nav--open' : ''}`}>
           <Link to="/shop" onClick={() => setMenuOpen(false)}>All Products</Link>
           <Link to="/shop?featured=true" onClick={() => setMenuOpen(false)}>Today&apos;s Deals</Link>

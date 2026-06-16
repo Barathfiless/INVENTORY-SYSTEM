@@ -527,10 +527,10 @@ export default function DeliveryMap({ order }) {
 
   return (
     <div style={styles.trackerCard}>
-      <div style={styles.layoutGrid}>
+      <div className="delivery-tracker-grid">
         
         {/* Left Column: Title, Progress, Executive Card, Logs */}
-        <div style={styles.leftCol}>
+        <div className="delivery-tracker-left-col">
           {/* Header Info */}
           <div style={styles.header}>
             <div style={styles.titleArea}>
@@ -559,9 +559,9 @@ export default function DeliveryMap({ order }) {
               />
             </div>
             
-            <div style={styles.milestoneNodeRow}>
+            <div className="delivery-milestone-node-row">
               {milestones.map((m, idx) => (
-                <div key={idx} style={styles.milestoneNodeCol}>
+                <div key={idx} className="delivery-milestone-node-col">
                   <div 
                     style={{
                       ...styles.milestoneDot,
@@ -573,8 +573,8 @@ export default function DeliveryMap({ order }) {
                     {m.reached && status !== 'cancelled' && <CheckCircle2 size={12} style={{ color: '#fff' }} />}
                   </div>
                   <span 
+                    className="delivery-milestone-label"
                     style={{ 
-                      ...styles.milestoneLabel, 
                       fontWeight: m.reached ? 700 : 500,
                       color: m.reached && status !== 'cancelled' ? 'var(--text-main)' : 'var(--text-muted)' 
                     }}
@@ -674,7 +674,7 @@ export default function DeliveryMap({ order }) {
         </div>
 
         {/* Right Column: Interactive Leaflet Map */}
-        <div style={styles.mapContainer}>
+        <div className="delivery-tracker-map-col">
           <div 
             ref={mapContainerRef} 
             style={{ 
