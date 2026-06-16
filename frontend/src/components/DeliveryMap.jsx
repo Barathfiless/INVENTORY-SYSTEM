@@ -18,6 +18,8 @@ export default function DeliveryMap({ order }) {
   const status = order?.status || 'pending';
   const shippingAddress = order?.shippingAddress || {};
   const destinationCity = shippingAddress.city || 'Your Location';
+  const storeName = localStorage.getItem('stocksync_store_name') || 'Fulfillment Hub';
+  const storeCity = localStorage.getItem('stocksync_store_city') || '';
 
   // State for simulated progress (0 to 100)
   const [progress, setProgress] = useState(0);
@@ -28,25 +30,338 @@ export default function DeliveryMap({ order }) {
   // Track animation frame or timer
   const timerRef = useRef(null);
 
-  // Bezier curve points representing route from Fulfillmen Center to Client
-  const startPoint = { x: 70, y: 220 };     // StockSync Fulfillment Center
-  const controlPoint = { x: 250, y: 60 };   // Mid Transit Gateway
-  const endPoint = { x: 430, y: 180 };      // Customer Destination
+  // Leaflet references and states
+  const mapContainerRef = useRef(null);
+  const leafletMapRef = useRef(null);
+  const routePolylineRef = useRef(null);
+  const progressPolylineRef = useRef(null);
+  const scooterMarkerRef = useRef(null);
+  const startMarkerRef = useRef(null);
+  const endMarkerRef = useRef(null);
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+  const [coords, setCoords] = useState(null); // { store: [lat, lng], customer: [lat, lng], route: [[lat, lng], ...] }
 
-  // Compute position & rotation on Quadratic Bezier Curve
-  const getBezierPointAndAngle = (t) => {
-    const tVal = Math.max(0, Math.min(1, t));
-    const mt = 1 - tVal;
-    const x = mt * mt * startPoint.x + 2 * mt * tVal * controlPoint.x + tVal * tVal * endPoint.x;
-    const y = mt * mt * startPoint.y + 2 * mt * tVal * controlPoint.y + tVal * tVal * endPoint.y;
-    
-    // Tangent vector for rotation
-    const dx = 2 * mt * (controlPoint.x - startPoint.x) + 2 * tVal * (endPoint.x - controlPoint.x);
-    const dy = 2 * mt * (controlPoint.y - startPoint.y) + 2 * tVal * (endPoint.y - controlPoint.y);
-    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-    
-    return { x, y, angle };
-  };
+  // Load Leaflet dynamically from CDN
+  useEffect(() => {
+    if (window.L) {
+      setLeafletLoaded(true);
+      return;
+    }
+
+    let cssLoaded = false;
+    let jsLoaded = false;
+
+    const checkAllLoaded = () => {
+      if (cssLoaded && jsLoaded) {
+        setLeafletLoaded(true);
+      }
+    };
+
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    link.onload = () => {
+      cssLoaded = true;
+      checkAllLoaded();
+    };
+    link.onerror = () => {
+      cssLoaded = true;
+      checkAllLoaded();
+    };
+    document.head.appendChild(link);
+
+    const script = document.createElement('script');
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    script.async = true;
+    script.onload = () => {
+      jsLoaded = true;
+      checkAllLoaded();
+    };
+    document.body.appendChild(script);
+  }, []);
+
+  // Resolve coordinates and fetch the driving route using OSRM
+  useEffect(() => {
+    if (!leafletLoaded) return;
+
+    const resolveCoordinates = async () => {
+      const storePincode = localStorage.getItem('stocksync_store_pincode') || '';
+      
+      const getKnownCoords = (cityOrPin) => {
+        const query = (cityOrPin || '').toLowerCase().trim();
+        if (query.includes('sathy') || query.includes('sathyamangalam') || query.includes('638401') || query.includes('638402')) {
+          return [11.5034, 77.2444];
+        }
+        if (query.includes('gobichettipalaiyam') || query.includes('gobichettipalayam') || query.includes('638452')) {
+          return [11.4534, 77.4373];
+        }
+        if (query.includes('erode') || query.includes('638001')) {
+          return [11.3410, 77.7172];
+        }
+        if (query.includes('coimbatore') || query.includes('641001')) {
+          return [11.0168, 76.9558];
+        }
+        if (query.includes('bengaluru') || query.includes('bangalore') || query.includes('560038')) {
+          return [12.9716, 77.5946];
+        }
+        if (query.includes('chennai') || query.includes('600001')) {
+          return [13.0827, 80.2707];
+        }
+        return null;
+      };
+
+      let storeCoords = getKnownCoords(storeCity) || getKnownCoords(storePincode);
+      let customerCoords = getKnownCoords(destinationCity) || getKnownCoords(shippingAddress.zip);
+
+      const fetchCoords = async (queryStr) => {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(queryStr)}&format=json&limit=1`);
+          const data = await res.json();
+          if (data && data[0]) {
+            return [parseFloat(data[0].lat), parseFloat(data[0].lon)];
+          }
+        } catch (err) {
+          console.warn('Geocoding search failed:', err);
+        }
+        return null;
+      };
+
+      if (!storeCoords) {
+        storeCoords = await fetchCoords(storePincode ? `${storePincode}, India` : `${storeCity || 'Coimbatore'}, Tamil Nadu, India`);
+      }
+      if (!customerCoords) {
+        customerCoords = await fetchCoords(shippingAddress.zip ? `${shippingAddress.zip}, India` : `${destinationCity}, Tamil Nadu, India`);
+      }
+
+      // Default fallbacks
+      if (!storeCoords) storeCoords = [11.5034, 77.2444]; // Sathy
+      if (!customerCoords) customerCoords = [11.4534, 77.4373]; // Gobichettipalaiyam
+
+      // Generate straight-line route
+      const straightRoute = [];
+      const numPoints = 100;
+      for (let i = 0; i <= numPoints; i++) {
+        const t = i / numPoints;
+        const lat = storeCoords[0] + (customerCoords[0] - storeCoords[0]) * t;
+        const lng = storeCoords[1] + (customerCoords[1] - storeCoords[1]) * t;
+        straightRoute.push([lat, lng]);
+      }
+
+      // Fetch OSRM Road Route
+      let roadRoute = [];
+      try {
+        const routeRes = await fetch(
+          `https://router.project-osrm.org/route/v1/driving/${storeCoords[1]},${storeCoords[0]};${customerCoords[1]},${customerCoords[0]}?overview=full&geometries=geojson`
+        );
+        const routeData = await routeRes.json();
+        if (routeData.routes && routeData.routes[0] && routeData.routes[0].geometry) {
+          roadRoute = routeData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
+        }
+      } catch (err) {
+        console.warn('OSRM routing failed:', err);
+      }
+
+      if (roadRoute.length === 0) {
+        roadRoute = straightRoute;
+      }
+
+      setCoords({
+        store: storeCoords,
+        customer: customerCoords,
+        straightRoute,
+        roadRoute,
+        route: straightRoute,
+      });
+    };
+
+    resolveCoordinates();
+  }, [leafletLoaded, storeCity, destinationCity, shippingAddress.zip]);
+
+  // Render Leaflet Map and Markers
+  useEffect(() => {
+    if (!leafletLoaded || !coords || !mapContainerRef.current) return;
+
+    const L = window.L;
+
+    if (!leafletMapRef.current) {
+      const map = L.map(mapContainerRef.current, {
+        zoomControl: false,
+        attributionControl: false
+      }).setView(coords.store, 11);
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      leafletMapRef.current = map;
+    }
+
+    const map = leafletMapRef.current;
+
+    // Remove old polylines/markers
+    if (routePolylineRef.current) map.removeLayer(routePolylineRef.current);
+    if (progressPolylineRef.current) map.removeLayer(progressPolylineRef.current);
+    if (scooterMarkerRef.current) map.removeLayer(scooterMarkerRef.current);
+    if (startMarkerRef.current) map.removeLayer(startMarkerRef.current);
+    if (endMarkerRef.current) map.removeLayer(endMarkerRef.current);
+
+    const createCustomPinIcon = (type, label) => {
+      const isHome = type === 'home';
+      // SVGs
+      const svgIcon = isHome
+        ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#1f2937" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+           </svg>`
+        : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#1f2937" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+            <circle cx="9" cy="9" r="1" fill="#1f2937"/>
+            <circle cx="15" cy="9" r="1" fill="#1f2937"/>
+           </svg>`;
+
+      return L.divIcon({
+        className: 'custom-leaflet-marker',
+        html: `
+          <div style="position: relative; width: 120px; height: 80px; display: flex; flex-direction: column; align-items: center; justify-content: flex-start;">
+            <!-- Teardrop Pin wrapper (centered horizontally, tip at y = 45) -->
+            <div style="position: relative; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center;">
+              <!-- Teardrop shape -->
+              <div style="width: 32px; height: 32px; border-radius: 50% 50% 50% 0; background: #1f2937; transform: rotate(-45deg); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.1); border: 1.5px solid #fff;">
+                <!-- Inner white circle (rotated back to make icon upright) -->
+                <div style="width: 20px; height: 20px; background: #fff; border-radius: 50%; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);">
+                  ${svgIcon}
+                </div>
+              </div>
+            </div>
+            <!-- Label Tag below the pin tip (y > 45) -->
+            <div style="margin-top: 4px; background: #ffffff; border: 1.5px solid #e2e8f0; color: #1f2937; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; white-space: nowrap; box-shadow: 0 2px 8px rgba(0,0,0,0.08); text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 110px; overflow: hidden; text-overflow: ellipsis;">
+              ${label}
+            </div>
+          </div>
+        `,
+        iconSize: [120, 80],
+        iconAnchor: [60, 45]
+      });
+    };
+
+    const storeLabel = storeName;
+    const customerLabel = 'Home';
+
+    const startMarker = L.marker(coords.store, {
+      icon: createCustomPinIcon('store', storeLabel)
+    }).addTo(map);
+    startMarkerRef.current = startMarker;
+
+    const endMarker = L.marker(coords.customer, {
+      icon: createCustomPinIcon('home', customerLabel)
+    }).addTo(map);
+    endMarkerRef.current = endMarker;
+
+    const initialStatus = order?.status || 'pending';
+    const isOutForDelivery = (initialStatus === 'out_for_delivery' || initialStatus === 'shipped' || initialStatus === 'delivered');
+    const activeRoutePoints = isOutForDelivery ? coords.roadRoute : coords.straightRoute;
+
+    const routePolyline = L.polyline(activeRoutePoints, {
+      color: isOutForDelivery ? '#f97316' : '#1e293b',
+      weight: isOutForDelivery ? 4 : 2,
+      dashArray: isOutForDelivery ? null : '6, 6'
+    }).addTo(map);
+    routePolylineRef.current = routePolyline;
+
+    // Invalidate map size and fit bounds with larger padding to prevent marker overflow
+    map.invalidateSize();
+    const bounds = L.latLngBounds([coords.store, coords.customer]);
+    map.fitBounds(bounds, { padding: [70, 70] });
+
+    // Monitor container resizing dynamically to prevent layout shifts
+    const resizeObserver = new ResizeObserver(() => {
+      if (leafletMapRef.current) {
+        leafletMapRef.current.invalidateSize();
+        if (coords) {
+          const b = L.latLngBounds([coords.store, coords.customer]);
+          leafletMapRef.current.fitBounds(b, { padding: [70, 70] });
+        }
+      }
+    });
+
+    if (mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
+    // Use a delayed execution as a backup for initial mounting transitions
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+      map.fitBounds(bounds, { padding: [70, 70] });
+    }, 150);
+
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(timer);
+    };
+  }, [leafletLoaded, coords]);
+
+  // Update animated progress polyline and scooter marker on Leaflet map
+  useEffect(() => {
+    if (!leafletMapRef.current || !coords) return;
+
+    const L = window.L;
+    const map = leafletMapRef.current;
+
+    const isOutForDelivery = (progress >= 85 || status === 'out_for_delivery' || status === 'delivered') && status !== 'cancelled';
+    const activeRoute = isOutForDelivery ? coords.roadRoute : coords.straightRoute;
+
+    // 1. Update route polyline geometry and style dynamically
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setLatLngs(activeRoute);
+      routePolylineRef.current.setStyle({
+        color: isOutForDelivery ? '#f97316' : '#1e293b',
+        weight: isOutForDelivery ? 4 : 2,
+        dashArray: isOutForDelivery ? null : '6, 6'
+      });
+    }
+
+    if (!activeRoute || !activeRoute.length) return;
+
+    const routeIndex = Math.min(
+      activeRoute.length - 1,
+      Math.floor((progress / 100) * activeRoute.length)
+    );
+    const progressRoute = activeRoute.slice(0, routeIndex + 1);
+
+    if (progressPolylineRef.current) map.removeLayer(progressPolylineRef.current);
+    if (!isOutForDelivery && status !== 'cancelled' && progressRoute.length > 1) {
+      const progressPolyline = L.polyline(progressRoute, {
+        color: '#10b981',
+        weight: 5
+      }).addTo(map);
+      progressPolylineRef.current = progressPolyline;
+    }
+
+    const scooterCoord = activeRoute[routeIndex] || coords.store;
+
+    if (scooterMarkerRef.current) map.removeLayer(scooterMarkerRef.current);
+
+    if (status !== 'cancelled' && progress >= 85 && progress < 100) {
+      const scooterIcon = L.divIcon({
+        className: 'scooter-leaflet-marker',
+        html: `
+          <div style="width: 28px; height: 28px; background-color: #f97316; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 10px rgba(249, 115, 22, 0.5); border: 2px solid #fff; animation: pulse 1.5s infinite ease-in-out;">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="#fff">
+              <path d="M19 15c-1.1 0-2-.9-2-2V9h-3.2c-.4 0-.8.2-1 .5l-2.6 3.5H3v2h4.5c.3 0 .5-.2.6-.4l.8-1.1h3.7c.4 0 .8-.2 1-.5l2.4-3.2V13c0 1.1.9 2 2 2h3v-2h-3z" />
+              <circle cx="5" cy="18" r="3" />
+              <circle cx="19" cy="18" r="3" />
+            </svg>
+          </div>
+        `,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+
+      const scooterMarker = L.marker(scooterCoord, { icon: scooterIcon }).addTo(map);
+      scooterMarkerRef.current = scooterMarker;
+    }
+  }, [progress, status, coords]);
 
   // Initialize progress based on backend Order status
   useEffect(() => {
@@ -61,6 +376,9 @@ export default function DeliveryMap({ order }) {
       setIsPlaying(false);
     } else if (status === 'shipped') {
       setProgress(55);
+      setIsPlaying(false);
+    } else if (status === 'out_for_delivery') {
+      setProgress(85);
       setIsPlaying(false);
     } else if (status === 'cancelled') {
       setProgress(0);
@@ -99,7 +417,7 @@ export default function DeliveryMap({ order }) {
 
     if (status === 'cancelled') {
       logs.push({
-        title: 'Order Cancelled 🚫',
+        title: 'Order Cancelled',
         desc: 'Transit pipeline aborted. Stock units replenished to catalog.',
         time: new Date(order.updatedAt || Date.now()).toLocaleTimeString(),
         active: true,
@@ -117,45 +435,45 @@ export default function DeliveryMap({ order }) {
       active: true,
     });
 
-    if (progress >= 10 || status === 'processing' || status === 'shipped' || status === 'delivered') {
+    if (progress >= 10 || status === 'processing' || status === 'shipped' || status === 'out_for_delivery' || status === 'delivered') {
       logs.push({
-        title: 'Yet to Dispatch ✅',
+        title: 'Yet to Dispatch',
         desc: 'Inventory checks cleared. Awaiting packaging team dispatch.',
         time: formatLogTime(0.5),
         active: true,
       });
     }
 
-    if (progress >= 25 || status === 'processing' || status === 'shipped' || status === 'delivered') {
+    if (progress >= 25 || status === 'processing' || status === 'shipped' || status === 'out_for_delivery' || status === 'delivered') {
       logs.push({
-        title: 'Dispatched from Hub 📦',
+        title: 'Dispatched from Hub',
         desc: 'Left fulfillment hub scan line. Assigned transit courier.',
         time: formatLogTime(1.2),
-        active: progress >= 25 || status === 'shipped' || status === 'delivered',
+        active: progress >= 25 || status === 'shipped' || status === 'out_for_delivery' || status === 'delivered',
       });
     }
 
-    if (progress >= 55 || status === 'shipped' || status === 'delivered') {
+    if (progress >= 55 || status === 'shipped' || status === 'out_for_delivery' || status === 'delivered') {
       logs.push({
-        title: 'Shipped & In Transit 🚚',
+        title: 'Shipped & In Transit',
         desc: `Arrived at gateway facility in vicinity of ${destinationCity}.`,
         time: formatLogTime(4.5),
-        active: progress >= 55 || status === 'delivered',
+        active: progress >= 55 || status === 'out_for_delivery' || status === 'delivered',
       });
     }
 
-    if (progress >= 85 || status === 'delivered') {
+    if (progress >= 85 || status === 'out_for_delivery' || status === 'delivered') {
       logs.push({
-        title: 'Out for Delivery 🛵',
-        desc: 'Delivery partner Rohan Kumar has collected package for delivery.',
+        title: 'Out for Delivery',
+        desc: 'Delivery partner XXXXX has collected package for delivery.',
         time: formatLogTime(7.8),
-        active: progress >= 85 || status === 'delivered',
+        active: progress >= 85 || status === 'out_for_delivery' || status === 'delivered',
       });
     }
 
     if (progress === 100 || status === 'delivered') {
       logs.push({
-        title: 'Delivered Successfully 🎉',
+        title: 'Delivered Successfully',
         desc: `Handed over securely to destination. Verification code matched.`,
         time: order?.deliveredAt ? new Date(order.deliveredAt).toLocaleString() : formatLogTime(8.2),
         active: true,
@@ -166,15 +484,14 @@ export default function DeliveryMap({ order }) {
     setLiveLogs(logs.reverse());
   }, [progress, status, order]);
 
-  const { x, y, angle } = getBezierPointAndAngle(progress / 100);
 
   // Milestone triggers
   const milestones = [
-    { label: 'Yet to Dispatch', reached: progress >= 5, value: 5 },
-    { label: 'Dispatched', reached: progress >= 25, value: 25 },
-    { label: 'Shipped', reached: progress >= 55, value: 55 },
-    { label: 'Out for Delivery', reached: progress >= 85, value: 85 },
-    { label: 'Delivered', reached: progress === 100, value: 100 },
+    { label: 'Yet to Dispatch', reached: progress >= 5 || ['processing', 'shipped', 'out_for_delivery', 'delivered'].includes(status), value: 5 },
+    { label: 'Dispatched', reached: progress >= 25 || ['shipped', 'out_for_delivery', 'delivered'].includes(status), value: 25 },
+    { label: 'Shipped', reached: progress >= 55 || ['out_for_delivery', 'delivered'].includes(status), value: 55 },
+    { label: 'Out for Delivery', reached: progress >= 85 || ['out_for_delivery', 'delivered'].includes(status), value: 85 },
+    { label: 'Delivered', reached: progress === 100 || status === 'delivered', value: 100 },
   ];
 
   // Delivery Executive Card messaging
@@ -183,276 +500,149 @@ export default function DeliveryMap({ order }) {
 
   if (status === 'cancelled') {
     executiveMessage = 'Delivery pipeline aborted.';
-  } else if (progress === 100) {
-    executiveMessage = 'Rohan wishes you a great day ahead! ⭐';
+  } else if (progress === 100 || status === 'delivered') {
+    executiveMessage = 'XXXXX wishes you a great day ahead!';
     isRohanActive = false;
-  } else if (progress >= 85) {
-    executiveMessage = 'Rohan has picked up your package and is approaching your address! 🛵';
+  } else if (progress >= 85 || status === 'out_for_delivery') {
+    executiveMessage = 'XXXXX has picked up your package and is approaching your address!';
     isRohanActive = true;
-  } else if (progress >= 55) {
-    executiveMessage = 'Rohan has verified details and will pick up shortly from local sorting hub.';
+  } else if (progress >= 55 || status === 'shipped') {
+    executiveMessage = 'XXXXX has verified details and will pick up shortly from local sorting hub.';
     isRohanActive = true;
-  } else if (progress >= 25) {
+  } else if (progress >= 25 || status === 'processing') {
     executiveMessage = 'Fulfillment scans complete. Delivery partner allocated.';
     isRohanActive = true;
   } else {
-    executiveMessage = 'Preparing order items. Rohan Kumar is waiting at the hub.';
+    executiveMessage = 'Preparing order items. XXXXX is waiting at the hub.';
     isRohanActive = true;
   }
 
   const triggerCall = () => {
-    alert('Simulating call to partner Rohan Kumar (9845X XXXXX). Call connected! 📞');
+    alert('Simulating call to partner XXXXX (9845X XXXXX). Call connected!');
   };
 
   const triggerChat = () => {
-    alert('Simulating chat connection. Rohan: "I am arriving at the warehouse gate now to pick up your order." 💬');
+    alert('Simulating chat connection. XXXXX: "I am arriving at the warehouse gate now to pick up your order."');
   };
 
   return (
     <div style={styles.trackerCard}>
-      
-      {/* Header Info */}
-      <div style={styles.header}>
-        <div style={styles.titleArea}>
-          <div style={styles.liveIndicator}>
-            <span style={{ ...styles.liveDot, backgroundColor: status === 'cancelled' ? '#ef4444' : '#10b981' }} />
-            <span style={{ ...styles.livePing, borderColor: status === 'cancelled' ? '#ef4444' : '#10b981' }} />
-          </div>
-          <div>
-            <h3 style={styles.title}>Real-time Route & Delivery Tracker</h3>
-            <p style={styles.subtitle}>Fulfillment Center ➔ {destinationCity}</p>
-          </div>
-        </div>
-
-        {status !== 'cancelled' && status !== 'delivered' && (
-          <div style={styles.simControls}>
-            <button 
-              type="button"
-              onClick={() => setIsPlaying(!isPlaying)} 
-              style={{ ...styles.simButton, backgroundColor: isPlaying ? '#ef4444' : 'var(--brand-primary)' }}
-            >
-              <Play size={14} style={{ marginRight: 4 }} />
-              {isPlaying ? 'Pause Tracker' : 'Start Swiggy Live Demo'}
-            </button>
-            {isPlaying && (
-              <button 
-                type="button"
-                onClick={() => setSimSpeed(prev => prev === 1 ? 5 : 1)} 
-                style={styles.speedButton}
-              >
-                {simSpeed > 1 ? '1x Real' : '5x Warp'}
-              </button>
-            )}
-            <button 
-              type="button"
-              onClick={() => { setProgress(5); setIsPlaying(false); }}
-              style={styles.resetButton}
-              aria-label="Restart tracking map simulation"
-            >
-              <RotateCcw size={14} />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Swiggy linear progress bar */}
-      <div style={styles.milestoneContainer}>
-        <div style={styles.milestoneProgressLine}>
-          <div 
-            style={{ 
-              ...styles.milestoneProgressFill, 
-              width: status === 'cancelled' ? '0%' : `${progress}%`,
-              backgroundColor: status === 'cancelled' ? '#94a3b8' : 'var(--success)'
-            }} 
-          />
-        </div>
-        
-        <div style={styles.milestoneNodeRow}>
-          {milestones.map((m, idx) => (
-            <div key={idx} style={styles.milestoneNodeCol}>
-              <div 
-                style={{
-                  ...styles.milestoneDot,
-                  backgroundColor: status === 'cancelled' ? '#cbd5e1' : m.reached ? 'var(--success)' : '#fff',
-                  borderColor: status === 'cancelled' ? '#94a3b8' : m.reached ? 'var(--success)' : '#cbd5e1',
-                  boxShadow: m.reached && status !== 'cancelled' ? '0 0 10px rgba(16, 185, 129, 0.4)' : 'none'
-                }}
-              >
-                {m.reached && status !== 'cancelled' && <CheckCircle2 size={12} style={{ color: '#fff' }} />}
-              </div>
-              <span 
-                style={{ 
-                  ...styles.milestoneLabel, 
-                  fontWeight: m.reached ? 700 : 500,
-                  color: m.reached && status !== 'cancelled' ? 'var(--text-main)' : 'var(--text-muted)' 
-                }}
-              >
-                {m.label}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Grid Layout: Left Map, Right Delivery Executive & Logs */}
       <div style={styles.layoutGrid}>
         
-        {/* Animated Map */}
-        <div style={styles.mapContainer}>
-          <svg viewBox="0 0 500 300" style={styles.svgMap}>
-            <defs>
-              <pattern id="gridPattern" width="25" height="25" patternUnits="userSpaceOnUse">
-                <path d="M 25 0 L 0 0 0 25" fill="none" stroke="rgba(255, 255, 255, 0.04)" strokeWidth="1" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="#0b1329" rx="16" />
-            <rect width="100%" height="100%" fill="url(#gridPattern)" rx="16" />
-
-            {/* Background simulated Swiggy road routes */}
-            <path d="M 40 80 Q 200 40 320 280" fill="none" stroke="rgba(255, 255, 255, 0.02)" strokeWidth="6" />
-            <path d="M 120 260 L 260 140 L 440 220" fill="none" stroke="rgba(255, 255, 255, 0.02)" strokeWidth="4" />
-
-            {/* Bezier Route Path */}
-            <path 
-              d={`M ${startPoint.x} ${startPoint.y} Q ${controlPoint.x} ${controlPoint.y} ${endPoint.x} ${endPoint.y}`} 
-              fill="none" 
-              stroke={status === 'cancelled' ? '#334155' : 'rgba(16, 185, 129, 0.12)'} 
-              strokeWidth="6" 
-              strokeLinecap="round"
-            />
-
-            {/* Animated tracking progress path */}
-            {status !== 'cancelled' && (
-              <path 
-                d={`M ${startPoint.x} ${startPoint.y} Q ${controlPoint.x} ${controlPoint.y} ${endPoint.x} ${endPoint.y}`} 
-                fill="none" 
-                stroke="#10b981" 
-                strokeWidth="5" 
-                strokeLinecap="round"
-                strokeDasharray="500"
-                strokeDashoffset={500 - (500 * (progress / 100))}
-                style={{ transition: 'stroke-dashoffset 0.15s linear' }}
-              />
-            )}
-
-            {/* Warehouse hub node */}
-            <circle cx={startPoint.x} cy={startPoint.y} r="8" fill="var(--brand-primary)" />
-            <circle cx={startPoint.x} cy={startPoint.y} r="16" fill="none" stroke="var(--brand-primary)" strokeWidth="2" opacity="0.35" />
-            <foreignObject x={startPoint.x - 50} y={startPoint.y + 12} width="100" height="40">
-              <div style={styles.mapLabel}>Fulfillment Hub</div>
-            </foreignObject>
-
-            {/* Client destination node */}
-            <circle cx={endPoint.x} cy={endPoint.y} r="8" fill={status === 'cancelled' ? '#ef4444' : progress === 100 ? '#10b981' : '#64748b'} />
-            <circle 
-              cx={endPoint.x} 
-              cy={endPoint.y} 
-              r="16" 
-              fill="none" 
-              stroke={status === 'cancelled' ? '#ef4444' : progress === 100 ? '#10b981' : '#64748b'} 
-              strokeWidth="2" 
-              style={{
-                animation: status !== 'cancelled' && progress < 100 ? 'pulse 1.8s infinite ease-in-out' : 'none',
-                opacity: 0.35
-              }} 
-            />
-            <foreignObject x={endPoint.x - 50} y={endPoint.y + 12} width="100" height="40">
-              <div style={{ ...styles.mapLabel, fontWeight: '750', color: '#fff' }}>{destinationCity}</div>
-            </foreignObject>
-
-            {/* Moving delivery scooter marker */}
-            {status !== 'cancelled' && (
-              <g 
-                transform={`translate(${x}, ${y}) rotate(${angle})`}
-                style={{ transition: 'transform 0.15s linear' }}
-              >
-                {/* pulsing backdrop */}
-                <circle cx="0" cy="0" r="18" fill="rgba(16, 185, 129, 0.25)" style={{ animation: 'pulse 1.5s infinite ease-in-out' }} />
-                <circle cx="0" cy="0" r="14" fill="#10b981" />
-                <foreignObject x="-9" y="-9" width="18" height="18">
-                  <div style={{ color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {/* Tiny custom scooter bike inline SVG */}
-                    <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor">
-                      <path d="M19 15c-1.1 0-2-.9-2-2V9h-3.2c-.4 0-.8.2-1 .5l-2.6 3.5H3v2h4.5c.3 0 .5-.2.6-.4l.8-1.1h3.7c.4 0 .8-.2 1-.5l2.4-3.2V13c0 1.1.9 2 2 2h3v-2h-3z" />
-                      <circle cx="5" cy="18" r="3" />
-                      <circle cx="19" cy="18" r="3" />
-                    </svg>
-                  </div>
-                </foreignObject>
-              </g>
-            )}
-          </svg>
-          
-          <div style={styles.etaBox}>
-            <span style={{ fontWeight: 800, color: 'var(--brand-primary)' }}>{Math.round(progress)}% Transit Done</span>
-            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
-              {status === 'cancelled' 
-                ? 'Delivery cancelled' 
-                : progress === 100 
-                ? 'Arrived!' 
-                : `ETA: ~${Math.max(1, Math.round((100 - progress) * 0.15))} mins`}
-            </span>
-          </div>
-        </div>
-
-        {/* Right Info & Swiggy Executive Panel */}
-        <div style={styles.infoCol}>
-          
-          {/* Swiggy Delivery Executive Card */}
-          <div style={styles.executiveCard}>
-            {status === 'cancelled' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: 'var(--danger)' }}>
-                <AlertTriangle size={20} />
-                <div>
-                  <h4 style={{ margin: 0, fontWeight: 800 }}>Delivery Pipeline Halted</h4>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Order has been cancelled.</p>
-                </div>
+        {/* Left Column: Title, Progress, Executive Card, Logs */}
+        <div style={styles.leftCol}>
+          {/* Header Info */}
+          <div style={styles.header}>
+            <div style={styles.titleArea}>
+              <div style={styles.liveIndicator}>
+                <span style={{ ...styles.liveDot, backgroundColor: status === 'cancelled' ? '#ef4444' : '#10b981' }} />
+                <span style={{ ...styles.livePing, borderColor: status === 'cancelled' ? '#ef4444' : '#10b981' }} />
               </div>
-            ) : (
-              <>
-                <div style={styles.executiveHeader}>
-                  <div style={styles.avatarBox}>
-                    {/* Delivery Partner Avatar SVG */}
-                    <svg viewBox="0 0 24 24" width="28" height="28" fill="var(--brand-primary)">
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M12 14c-4.4 0-8 2-8 5v1h16v-1c0-3-3.6-5-8-5z" />
-                    </svg>
-                    {isRohanActive && <span style={styles.activeDot} />}
+              <div>
+                <h3 style={styles.title}>Real-time Route & Delivery Tracker</h3>
+                <p style={styles.subtitle}>
+                  {storeCity ? `${storeName} (${storeCity})` : storeName} ➔ Home ({destinationCity})
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Swiggy linear progress bar */}
+          <div style={styles.milestoneContainer}>
+            <div style={styles.milestoneProgressLine}>
+              <div 
+                style={{ 
+                  ...styles.milestoneProgressFill, 
+                  width: status === 'cancelled' ? '0%' : `${progress}%`,
+                  backgroundColor: status === 'cancelled' ? '#94a3b8' : 'var(--success)'
+                }} 
+              />
+            </div>
+            
+            <div style={styles.milestoneNodeRow}>
+              {milestones.map((m, idx) => (
+                <div key={idx} style={styles.milestoneNodeCol}>
+                  <div 
+                    style={{
+                      ...styles.milestoneDot,
+                      backgroundColor: status === 'cancelled' ? '#cbd5e1' : m.reached ? 'var(--success)' : '#fff',
+                      borderColor: status === 'cancelled' ? '#94a3b8' : m.reached ? 'var(--success)' : '#cbd5e1',
+                      boxShadow: m.reached && status !== 'cancelled' ? '0 0 10px rgba(16, 185, 129, 0.4)' : 'none'
+                    }}
+                  >
+                    {m.reached && status !== 'cancelled' && <CheckCircle2 size={12} style={{ color: '#fff' }} />}
                   </div>
+                  <span 
+                    style={{ 
+                      ...styles.milestoneLabel, 
+                      fontWeight: m.reached ? 700 : 500,
+                      color: m.reached && status !== 'cancelled' ? 'var(--text-main)' : 'var(--text-muted)' 
+                    }}
+                  >
+                    {m.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Swiggy Delivery Executive Card */}
+          {progress >= 85 && progress < 100 && status !== 'cancelled' && (
+            <div style={styles.executiveCard}>
+              {status === 'cancelled' ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', color: 'var(--danger)' }}>
+                  <AlertTriangle size={20} />
                   <div>
-                    <h4 style={styles.execName}>Rohan Kumar</h4>
-                    <div style={styles.execBadge}>
-                      <span style={styles.badgeRating}>★ 4.9</span>
-                      <span style={styles.badgeLabel}>Verified Swiggy Partner</span>
+                    <h4 style={{ margin: 0, fontWeight: 800 }}>Delivery Pipeline Halted</h4>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>Order has been cancelled.</p>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={styles.executiveHeader}>
+                    <div style={styles.avatarBox}>
+                      {/* Delivery Partner Avatar SVG */}
+                      <svg viewBox="0 0 24 24" width="28" height="28" fill="var(--brand-primary)">
+                        <circle cx="12" cy="8" r="4" />
+                        <path d="M12 14c-4.4 0-8 2-8 5v1h16v-1c0-3-3.6-5-8-5z" />
+                      </svg>
+                      {isRohanActive && <span style={styles.activeDot} />}
+                    </div>
+                    <div>
+                      <h4 style={styles.execName}>XXXXX</h4>
+                      <div style={styles.execBadge}>
+                        <span style={styles.badgeRating}>★ 4.9</span>
+                        <span style={styles.badgeLabel}>Verified Stocksync Partner</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div style={styles.execMessage}>
-                  {executiveMessage}
-                </div>
-
-                {isRohanActive && (
-                  <div style={styles.execActions}>
-                    <button 
-                      type="button" 
-                      onClick={triggerCall} 
-                      style={styles.execBtn}
-                    >
-                      <Phone size={14} /> Call Rohan
-                    </button>
-                    <button 
-                      type="button" 
-                      onClick={triggerChat} 
-                      style={{ ...styles.execBtn, backgroundColor: '#f1f5f9', color: 'var(--text-main)' }}
-                    >
-                      <MessageSquare size={14} /> Chat
-                    </button>
+                  <div style={styles.execMessage}>
+                    {executiveMessage}
                   </div>
-                )}
-              </>
-            )}
-          </div>
+
+                  {isRohanActive && (
+                    <div style={styles.execActions}>
+                      <button 
+                        type="button" 
+                        onClick={triggerCall} 
+                        style={styles.execBtn}
+                      >
+                        <Phone size={14} /> Call XXXXX
+                      </button>
+                      <button 
+                        type="button" 
+                        onClick={triggerChat} 
+                        style={{ ...styles.execBtn, backgroundColor: '#f1f5f9', color: 'var(--text-main)' }}
+                      >
+                        <MessageSquare size={14} /> Chat
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
 
           {/* Logistics Tracking History */}
           <div style={styles.logsBox}>
@@ -481,7 +671,48 @@ export default function DeliveryMap({ order }) {
               ))}
             </div>
           </div>
+        </div>
 
+        {/* Right Column: Interactive Leaflet Map */}
+        <div style={styles.mapContainer}>
+          <div 
+            ref={mapContainerRef} 
+            style={{ 
+              width: '100%', 
+              height: '380px', 
+              borderRadius: '14px', 
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.06)',
+              backgroundColor: '#f8fafc',
+              position: 'relative',
+              overflow: 'hidden',
+              border: '1.5px solid var(--border-light)',
+              transform: 'translate3d(0, 0, 0)',
+              isolation: 'isolate',
+              zIndex: 1
+            }}
+          >
+            {!leafletLoaded && (
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px', fontWeight: 600 }}>
+                Loading map canvas...
+              </div>
+            )}
+            {leafletLoaded && !coords && (
+              <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '13px', fontWeight: 600 }}>
+                Geocoding locations and plotting route...
+              </div>
+            )}
+          </div>
+          
+          <div style={styles.etaBox}>
+            <span style={{ fontWeight: 800, color: 'var(--brand-primary)' }}>{Math.round(progress)}% Transit Done</span>
+            <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+              {status === 'cancelled' 
+                ? 'Delivery cancelled' 
+                : progress === 100 
+                ? 'Arrived!' 
+                : `ETA: ~${Math.max(1, Math.round((100 - progress) * 0.15))} mins`}
+            </span>
+          </div>
         </div>
 
       </div>
@@ -491,11 +722,10 @@ export default function DeliveryMap({ order }) {
 
 const styles = {
   trackerCard: {
-    background: '#ffffff',
-    border: '1px solid var(--border-light)',
-    borderRadius: '16px',
-    padding: '1.5rem',
-    boxShadow: 'var(--shadow-sm)',
+    background: 'transparent',
+    border: 'none',
+    boxShadow: 'none',
+    padding: 0,
     marginTop: '1.5rem',
     marginBottom: '1.5rem',
   },
@@ -638,8 +868,14 @@ const styles = {
   },
   layoutGrid: {
     display: 'grid',
-    gridTemplateColumns: '1.1fr 0.9fr',
+    gridTemplateColumns: '1.2fr 0.8fr',
     gap: '1.5rem',
+    alignItems: 'start',
+  },
+  leftCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1rem',
   },
   mapContainer: {
     display: 'flex',
@@ -664,7 +900,7 @@ const styles = {
   etaBox: {
     display: 'flex',
     justifyContent: 'space-between',
-    background: '#f8fafc',
+    background: '#ffffff',
     border: '1px solid var(--border-light)',
     borderRadius: '8px',
     padding: '0.5rem 0.85rem',

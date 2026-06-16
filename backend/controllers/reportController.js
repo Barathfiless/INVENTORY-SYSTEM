@@ -2,8 +2,9 @@ import Purchase from '../models/Purchase.js';
 import Sale from '../models/Sale.js';
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
+import asyncHandler from '../middleware/asyncHandler.js';
 
-export const getDashboardStats = async (req, res) => {
+export const getDashboardStats = asyncHandler(async (req, res) => {
   const myProducts = await Product.find({ createdBy: req.user._id }).select('_id');
   const myProductIds = myProducts.map(p => p._id);
 
@@ -43,7 +44,7 @@ export const getDashboardStats = async (req, res) => {
     profit: Math.max(0, (sales[0]?.total || 0) - (purchases[0]?.total || 0)),
     loss: Math.max(0, (purchases[0]?.total || 0) - (sales[0]?.total || 0)),
   });
-};
+});
 
 const localCalcPrices = (items) => {
   const itemsPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -53,7 +54,7 @@ const localCalcPrices = (items) => {
   return { itemsPrice, shippingPrice, taxPrice, totalPrice };
 };
 
-export const getReports = async (req, res) => {
+export const getReports = asyncHandler(async (req, res) => {
   const { startDate, endDate } = req.query;
   const dateFilter = {};
   if (startDate || endDate) {
@@ -132,4 +133,4 @@ export const getReports = async (req, res) => {
       profit: saleTotal - purchaseTotal,
     },
   });
-};
+});

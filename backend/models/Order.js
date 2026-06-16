@@ -18,6 +18,7 @@ const orderSchema = new mongoose.Schema(
       state: { type: String, required: true },
       zip: { type: String, required: true },
       country: { type: String, default: 'India' },
+      phone: { type: String, required: true },
     },
     paymentMethod: { type: String, default: 'COD' },
     itemsPrice: { type: Number, required: true, default: 0 },
@@ -26,7 +27,7 @@ const orderSchema = new mongoose.Schema(
     totalPrice: { type: Number, required: true, default: 0 },
     status: {
       type: String,
-      enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+      enum: ['pending', 'processing', 'shipped', 'out_for_delivery', 'delivered', 'cancelled'],
       default: 'pending',
     },
     isPaid: { type: Boolean, default: false },

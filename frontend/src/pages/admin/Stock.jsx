@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { AlertTriangle, Package, ChevronLeft, ChevronRight, Image as ImageIcon, Search, ArrowUpDown, SlidersHorizontal, X } from 'lucide-react';
+import { AlertTriangle, Package, ChevronLeft, ChevronRight, Image as ImageIcon, Search, ArrowUpDown, SlidersHorizontal, X, RotateCcw } from 'lucide-react';
 import { productAPI } from '../../api/api';
 import { formatCurrency } from '../../utils/format';
 
@@ -32,6 +32,12 @@ export default function Stock() {
   const [showSortDropdown, setShowSortDropdown] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+
+  // Clear stock states
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isClearing, setIsClearing] = useState(false);
+  const [clearError, setClearError] = useState('');
 
   const sortRef = useRef(null);
   const categoryRef = useRef(null);
@@ -108,6 +114,30 @@ export default function Stock() {
       if (sortBy === 'price-desc') return b.price - a.price;
       return 0;
     });
+
+  const handleClearStockSubmit = async (e) => {
+    e.preventDefault();
+    if (!confirmPassword) return;
+    setIsClearing(true);
+    setClearError('');
+    try {
+      await productAPI.clearStock(confirmPassword);
+      const { data: d } = await productAPI.getStock();
+      setData(d);
+      setShowClearConfirm(false);
+      setConfirmPassword('');
+    } catch (err) {
+      setClearError(err.response?.data?.message || 'Verification failed. Please try again.');
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  const cancelClear = () => {
+    setShowClearConfirm(false);
+    setConfirmPassword('');
+    setClearError('');
+  };
 
   // Pagination logic
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -254,6 +284,16 @@ export default function Stock() {
             )}
           </div>
 
+          {/* Clear Stock Button */}
+          <button 
+            className="toolbar-btn toolbar-btn-danger"
+            onClick={() => setShowClearConfirm(true)}
+            title="Clear All Stock Levels"
+            style={{ marginRight: '0.5rem' }}
+          >
+            <RotateCcw size={18} />
+          </button>
+
           {/* Expandable Search Input */}
           <div className={`toolbar-search-wrap ${showSearch ? 'expanded' : ''}`}>
             <button 
@@ -375,6 +415,49 @@ export default function Stock() {
             </div>
           )}
         </>
+      )}
+      {/* Clear Stock Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="modal-overlay" onClick={cancelClear}>
+          <div className="modal-content modal-content-small" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Clear All Stock</h2>
+              <button className="modal-close-btn" onClick={cancelClear} aria-label="Close"><X size={24} /></button>
+            </div>
+            <form onSubmit={handleClearStockSubmit} className="modal-form">
+              <div className="delete-warning">
+                <AlertTriangle size={48} strokeWidth={1.5} style={{ color: 'var(--danger)' }} />
+                <p>This action will set the stock level of all your products to 0. Enter your password to confirm:</p>
+              </div>
+              <div className="form-group">
+                <label>Password</label>
+                <input 
+                  type="password" 
+                  required 
+                  value={confirmPassword} 
+                  disabled={isClearing}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setClearError('');
+                  }} 
+                  placeholder="Enter your password" 
+                  autoFocus 
+                />
+              </div>
+              {clearError && (
+                <p style={{ color: 'var(--danger)', fontSize: '0.82rem', fontWeight: 550, marginTop: '-0.5rem', marginBottom: '1rem' }}>
+                  {clearError}
+                </p>
+              )}
+              <div className="modal-actions">
+                <button type="button" className="btn-secondary" disabled={isClearing} onClick={cancelClear}>Cancel</button>
+                <button type="submit" className="btn-delete-confirm" disabled={isClearing || !confirmPassword}>
+                  {isClearing ? 'Clearing...' : 'Confirm Clear'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </section>
   );

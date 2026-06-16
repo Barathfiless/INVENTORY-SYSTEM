@@ -4,6 +4,7 @@ const productSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     description: { type: String, required: true },
+    about: { type: String, default: '' },
     sku: { type: String, required: true, unique: true, uppercase: true, trim: true },
     category: { type: String, required: true, trim: true },
     brand: { type: String, trim: true, default: 'Generic' },
@@ -12,6 +13,7 @@ const productSchema = new mongoose.Schema(
     stock: { type: Number, required: true, min: 0, default: 0 },
     lowStockThreshold: { type: Number, default: 10 },
     image: { type: String, default: '' },
+    images: [{ type: String }],
     rating: { type: Number, default: 4, min: 0, max: 5 },
     reviewCount: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },

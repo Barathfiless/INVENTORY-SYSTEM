@@ -23,6 +23,7 @@ export default function Purchases() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isBulkDelete, setIsBulkDelete] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [ecomLoading, setEcomLoading] = useState(null);
@@ -56,6 +57,9 @@ export default function Purchases() {
     quantity: 1,
     unitCost: 0,
     productImage: null,
+    productImages: [],
+    description: '',
+    about: '',
   });
 
   const load = async () => {
@@ -135,22 +139,66 @@ export default function Purchases() {
     setIsBulkDelete(false);
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setForm({ ...form, productImage: file });
+  const compressImage = (file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) => {
+    return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to compressed JPEG data URL
+          const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedBase64);
+        };
+        img.src = event.target.result;
+      };
       reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageChange = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setForm({ ...form, productImages: files });
+      
+      const promises = files.map(file => compressImage(file));
+
+      Promise.all(promises).then(previews => {
+        setImagePreviews(previews);
+        setImagePreview(previews[0]);
+      });
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage('');
-    try {      const productData = {
+    try {
+      const productData = {
         name: form.productName,
-        description: form.productName,
+        description: form.description || form.productName,
+        about: form.about,
         sku: `SKU-${Date.now()}`,
         category: form.productType,
         brand: '',
@@ -159,6 +207,7 @@ export default function Purchases() {
         stock: 0,
         lowStockThreshold: 10,
         image: imagePreview || '',
+        images: imagePreviews,
         featured: false,
         isActive: false, // not on e-commerce until pushed
       };
@@ -174,8 +223,9 @@ export default function Purchases() {
         notes: '',
       });
 
-      setForm({ productName: '', productType: '', quantity: 1, unitCost: 0, productImage: null });
+      setForm({ productName: '', productType: '', quantity: 1, unitCost: 0, productImage: null, productImages: [], description: '', about: '' });
       setImagePreview(null);
+      setImagePreviews([]);
       setShowAddForm(false);
       showMessage('Purchase recorded successfully.');
       load();
@@ -185,8 +235,9 @@ export default function Purchases() {
   };
 
   const resetForm = () => {
-    setForm({ productName: '', productType: '', quantity: 1, unitCost: 0, productImage: null });
+    setForm({ productName: '', productType: '', quantity: 1, unitCost: 0, productImage: null, productImages: [], description: '', about: '' });
     setImagePreview(null);
+    setImagePreviews([]);
   };
 
   // Filter & Sort logic
@@ -505,20 +556,68 @@ export default function Purchases() {
                 />
               </div>
               <div className="form-group">
-                <label>Product Image</label>
+                <label>Product Description</label>
+                <textarea 
+                  required 
+                  value={form.description} 
+                  onChange={(e) => setForm({ ...form, description: e.target.value })} 
+                  placeholder="Enter product description"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 1rem',
+                    fontSize: '0.95rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-light)',
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              <div className="form-group">
+                <label>About Product (Key features separated by periods)</label>
+                <textarea 
+                  required 
+                  value={form.about} 
+                  onChange={(e) => setForm({ ...form, about: e.target.value })} 
+                  placeholder="Enter key features separated by periods"
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: '0.65rem 1rem',
+                    fontSize: '0.95rem',
+                    borderRadius: '8px',
+                    border: '1px solid var(--border-light)',
+                    boxSizing: 'border-box',
+                    fontFamily: 'inherit',
+                    resize: 'vertical'
+                  }}
+                />
+              </div>
+              <div className="form-group">
+                <label>Product Images</label>
                 <div className="image-upload-container">
-                  <input type="file" id="productImage" accept="image/*" onChange={handleImageChange} className="image-input-hidden" />
+                  <input type="file" id="productImage" accept="image/*" onChange={handleImageChange} className="image-input-hidden" multiple />
                   <label htmlFor="productImage" className="image-upload-label">
-                    {imagePreview ? (
-                      <div className="image-preview">
-                        <img src={imagePreview} alt="Product preview" />
-                        <div className="image-overlay"><Upload size={24} /><span>Change Image</span></div>
+                    {imagePreviews.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', width: '100%', padding: '0.5rem' }}>
+                        {imagePreviews.map((preview, idx) => (
+                          <div key={idx} style={{ position: 'relative', aspectRatio: '1', borderRadius: '6px', overflow: 'hidden', border: '1px solid var(--border-light)' }}>
+                            <img src={preview} alt={`Preview ${idx}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            {idx === 0 && (
+                              <span style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0, 128, 96, 0.85)', color: '#fff', fontSize: '0.65rem', padding: '2px 4px', textAlign: 'center', fontWeight: 'bold' }}>
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <div className="image-upload-placeholder">
                         <ImageIcon size={48} strokeWidth={1.5} />
-                        <span>Click to upload image</span>
-                        <small>PNG, JPG, GIF up to 10MB</small>
+                        <span>Click to upload images</span>
+                        <small>Select one or more images</small>
                       </div>
                     )}
                   </label>

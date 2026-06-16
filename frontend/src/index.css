@@ -1649,6 +1649,10 @@ a:hover {
   background: #f5f3ff;
   color: #8b5cf6;
 }
+.status.out_for_delivery {
+  background: #fff7ed;
+  color: #f97316;
+}
 .status.delivered {
   background: #ecfdf5;
   color: var(--success);
@@ -3957,6 +3961,11 @@ a:hover {
   color: #8b5cf6 !important;
 }
 
+.status-select-btn--out_for_delivery {
+  background-color: rgba(249, 115, 22, 0.08) !important;
+  color: #f97316 !important;
+}
+
 .status-select-btn--delivered {
   background-color: rgba(34, 197, 94, 0.08) !important;
   color: #22c55e !important;
@@ -4022,6 +4031,7 @@ a:hover {
 .status-dot--pending { background-color: #fb923c; }
 .status-dot--processing { background-color: #3b82f6; }
 .status-dot--shipped { background-color: #8b5cf6; }
+.status-dot--out_for_delivery { background-color: #f97316; }
 .status-dot--delivered { background-color: #22c55e; }
 .status-dot--cancelled { background-color: #ef4444; }
 
@@ -4826,9 +4836,18 @@ a:hover {
   vertical-align: middle;
 }
 
+.toolbar-btn-danger {
+  color: var(--danger) !important;
+  border-color: rgba(216, 44, 13, 0.3) !important;
+  background: var(--bg-surface) !important;
+}
+
 .toolbar-btn-danger:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  color: var(--text-muted) !important;
+  border-color: var(--border-light) !important;
+  background: var(--bg-surface) !important;
 }
 
 .toolbar-btn-danger:not(:disabled):hover,
@@ -6202,44 +6221,53 @@ a:hover {
   gap: 0.5rem;
   font-size: 0.88rem;
 }
-.qty-row select {
-  width: auto;
-  margin: 0;
-  padding: 0.25rem 1.5rem 0.25rem 0.5rem;
-  border-radius: var(--radius-sm);
-  background-position: right 0.4rem center;
+.qty-row .cselect {
+  width: 75px;
+}
+.qty-row .cselect__trigger {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.88rem;
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-main);
+  height: 32px;
+  border-color: var(--border-light);
+}
+.qty-row .cselect__list {
+  max-height: 200px;
+  overflow-y: auto;
 }
 .btn-amazon-add-to-cart {
-  background-color: #FFD814;
-  border: 1px solid #FCD200;
-  color: #0F1111;
+  background-color: #008060;
+  border: 1px solid #006e52;
+  color: #ffffff;
   border-radius: 99px;
   padding: 0.65rem;
   font-weight: 500;
   font-size: 0.9rem;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(213,217,217,.5);
+  box-shadow: 0 2px 5px rgba(0, 128, 96, 0.2);
   transition: all 0.15s ease;
 }
 .btn-amazon-add-to-cart:hover {
-  background-color: #F7CA00;
-  border-color: #F2C200;
+  background-color: #006e52;
+  border-color: #005842;
 }
 .btn-amazon-buy-now {
-  background-color: #FFA41C;
-  border: 1px solid #FF8F00;
-  color: #0F1111;
+  background-color: #5c6ac4;
+  border: 1px solid #4e5ab7;
+  color: #ffffff;
   border-radius: 99px;
   padding: 0.65rem;
   font-weight: 500;
   font-size: 0.9rem;
   cursor: pointer;
-  box-shadow: 0 2px 5px rgba(213,217,217,.5);
+  box-shadow: 0 2px 5px rgba(92, 106, 196, 0.2);
   transition: all 0.15s ease;
 }
 .btn-amazon-buy-now:hover {
-  background-color: #FA8900;
-  border-color: #E67E00;
+  background-color: #4b57a8;
+  border-color: #3f4a93;
 }
 .buybox-security {
   font-size: 0.8rem;
@@ -6595,6 +6623,16 @@ a:hover {
   margin-right: 0 !important;
   padding-left: 1.5rem !important;
   padding-right: 1.5rem !important;
+}
+
+/* Custom Leaflet Marker overrides to prevent default white box outline */
+.custom-leaflet-marker {
+  background: transparent !important;
+  border: none !important;
+}
+.scooter-leaflet-marker {
+  background: transparent !important;
+  border: none !important;
 }
 
 

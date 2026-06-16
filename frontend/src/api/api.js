@@ -29,6 +29,7 @@ export const productAPI = {
   create: (data) => api.post('/products', data),
   update: (id, data) => api.put(`/products/${id}`, data),
   delete: (id) => api.delete(`/products/${id}`),
+  clearStock: (password) => api.post('/products/admin/clear-stock', { password }),
 };
 
 export const purchaseAPI = {

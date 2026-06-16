@@ -8,6 +8,7 @@ import {
   deleteProduct,
   getCategories,
   getStockSummary,
+  clearStock,
 } from '../controllers/productController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -16,6 +17,7 @@ const router = express.Router();
 router.get('/categories', getCategories);
 router.get('/admin/all', protect, authorize('admin'), getAllProductsAdmin);
 router.get('/admin/stock', protect, authorize('admin'), getStockSummary);
+router.post('/admin/clear-stock', protect, authorize('admin'), clearStock);
 router.get('/', getProducts);
 router.get('/:id', getProductById);
 router.post('/', protect, authorize('admin'), createProduct);

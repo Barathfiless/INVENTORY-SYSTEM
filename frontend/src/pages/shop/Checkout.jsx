@@ -32,6 +32,7 @@ export default function Checkout() {
     state: user?.address?.state || '',
     zip: localStorage.getItem('stocksync_pincode') || user?.address?.zip || '',
     country: 'India',
+    phone: '',
   });
 
   // Geolocation detection states
@@ -99,6 +100,43 @@ export default function Checkout() {
     }
   }, [address.zip]);
 
+  // Dynamically resolve City and State when a valid 6-digit PIN code is entered/auto-detected
+  useEffect(() => {
+    const cleanZip = address.zip.trim();
+    if (cleanZip.length === 6 && /^\d+$/.test(cleanZip)) {
+      const resolveCityAndState = async () => {
+        try {
+          const res = await fetch(`https://api.postalpincode.in/pincode/${cleanZip}`);
+          const data = await res.json();
+          if (data[0] && data[0].Status === 'Success' && data[0].PostOffice) {
+            const pos = data[0].PostOffice;
+            const diffBlockPO = pos.find(po => po.Block && po.Block !== po.District && po.Block !== 'Not Available');
+            const rawCity = diffBlockPO ? diffBlockPO.Block : pos[0].District;
+            const resolvedCity = rawCity
+              .replace(/\s+(North|South|East|West|Taluk|Tehsil|City|Rural|Urban)$/i, '')
+              .trim();
+            const resolvedState = pos[0].State;
+
+            setAddress(prev => ({
+              ...prev,
+              city: resolvedCity,
+              state: resolvedState
+            }));
+            setAutofilledFields(prev => ({
+              ...prev,
+              city: true,
+              state: true
+            }));
+            setTimeout(() => setAutofilledFields({}), 2000);
+          }
+        } catch (err) {
+          console.warn('PIN Code API lookup failed:', err);
+        }
+      };
+      resolveCityAndState();
+    }
+  }, [address.zip]);
+
   // QR Code Timer Effect
   useEffect(() => {
     let interval = null;
@@ -113,84 +151,100 @@ export default function Checkout() {
   }, [qrTimerActive, qrCountdown]);
 
   // High-accuracy Geolocation detector: IP-based lookup with browser GPS fallback
-  const detectLocation = async () => {
+  const detectLocation = () => {
     setDetecting(true);
     setDetectError('');
-    
-    // 1. Try IP-based location first (extremely accurate for city/zip on desktop)
-    try {
-      const ipResponse = await fetch('https://ipapi.co/json/');
-      if (!ipResponse.ok) throw new Error('IP API lookup failed');
-      const ipData = await ipResponse.json();
-      
-      if (ipData && ipData.postal && ipData.country === 'IN') {
+
+    const resolveAddressFromCoords = async (latitude, longitude, source) => {
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+        );
+        if (!response.ok) throw new Error('OSM geocoding failed.');
+        const data = await response.json();
+        const addr = data.address || {};
+
+        const streetParts = [
+          addr.road,
+          addr.neighbourhood,
+          addr.suburb,
+          addr.village,
+          addr.industrial
+        ].filter(Boolean);
+        const streetStr = streetParts.join(', ') || addr.amenity || `${addr.suburb || addr.town || 'HAL 2nd Stage'}, Indiranagar`;
+
         const newAddress = {
-          street: ipData.org ? `${ipData.org}, ${ipData.city}` : `HAL 2nd Stage, Indiranagar`,
-          city: ipData.city || 'Bengaluru',
-          state: ipData.region || 'Karnataka',
-          zip: ipData.postal || '560038',
+          street: streetStr,
+          city: addr.city || addr.town || addr.municipality || 'Bengaluru',
+          state: addr.state || 'Karnataka',
+          zip: addr.postcode || '560038',
           country: 'India',
         };
-        setAddress(newAddress);
+
+        setAddress(prev => ({ ...prev, ...newAddress }));
         setAutofilledFields({ street: true, city: true, state: true, zip: true });
         setTimeout(() => setAutofilledFields({}), 2000);
         setDetecting(false);
-        return;
-      }
-    } catch (ipErr) {
-      console.warn('IP Geolocation failed, trying browser GPS:', ipErr);
-    }
-
-    // 2. Fallback to Browser Geolocation + OpenStreetMap reverse geocoding
-    if (!navigator.geolocation) {
-      fallbackToMockAddress();
-      setDetecting(false);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        try {
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
-          );
-          if (!response.ok) throw new Error('OSM geocoding failed.');
-          const data = await response.json();
-          const addr = data.address || {};
-
-          const streetParts = [
-            addr.road,
-            addr.neighbourhood,
-            addr.suburb,
-            addr.village,
-            addr.industrial
-          ].filter(Boolean);
-          const streetStr = streetParts.join(', ') || addr.amenity || 'Indiranagar';
-
-          const newAddress = {
-            street: streetStr,
-            city: addr.city || addr.town || addr.municipality || 'Bengaluru',
-            state: addr.state || 'Karnataka',
-            zip: addr.postcode || '560038',
-            country: 'India',
-          };
-
-          setAddress(newAddress);
-          setAutofilledFields({ street: true, city: true, state: true, zip: true });
-          setTimeout(() => setAutofilledFields({}), 2000);
-        } catch (err) {
+      } catch (err) {
+        console.warn(`Reverse geocoding failed for ${source}:`, err);
+        if (source === 'GPS') {
+          // If GPS reverse geocoding fails, fallback to IP lookup
+          await runIpLookup();
+        } else {
           fallbackToMockAddress();
-        } finally {
-          setDetecting(false);
         }
-      },
-      (error) => {
+      }
+    };
+
+    const runIpLookup = async () => {
+      try {
+        const ipResponse = await fetch('https://ipapi.co/json/');
+        if (!ipResponse.ok) throw new Error('IP API lookup failed');
+        const ipData = await ipResponse.json();
+
+        if (ipData && ipData.country === 'IN') {
+          // Attempt to reverse geocode the IP latitude/longitude for a better street address
+          if (ipData.latitude && ipData.longitude) {
+            await resolveAddressFromCoords(ipData.latitude, ipData.longitude, 'IP');
+          } else {
+            // Otherwise construct a clean address without using the ISP organization (org)
+            const newAddress = {
+              street: `Indiranagar, ${ipData.city}`,
+              city: ipData.city || 'Bengaluru',
+              state: ipData.region || 'Karnataka',
+              zip: ipData.postal || '560038',
+              country: 'India',
+            };
+            setAddress(prev => ({ ...prev, ...newAddress }));
+            setAutofilledFields({ street: true, city: true, state: true, zip: true });
+            setTimeout(() => setAutofilledFields({}), 2000);
+            setDetecting(false);
+          }
+        } else {
+          fallbackToMockAddress();
+        }
+      } catch (ipErr) {
+        console.warn('IP lookup fallback failed:', ipErr);
         fallbackToMockAddress();
-        setDetecting(false);
-      },
-      { enableHighAccuracy: true, timeout: 6000 }
-    );
+      }
+    };
+
+    // 1. Try Browser Geolocation first (most accurate)
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          await resolveAddressFromCoords(latitude, longitude, 'GPS');
+        },
+        async (error) => {
+          console.warn('GPS Geolocation failed, falling back to IP:', error);
+          await runIpLookup();
+        },
+        { enableHighAccuracy: true, timeout: 5000 }
+      );
+    } else {
+      runIpLookup();
+    }
   };
 
   const fallbackToMockAddress = () => {
@@ -201,7 +255,7 @@ export default function Checkout() {
       zip: '560038',
       country: 'India',
     };
-    setAddress(mockAddr);
+    setAddress(prev => ({ ...prev, ...mockAddr }));
     setAutofilledFields({ street: true, city: true, state: true, zip: true });
     setTimeout(() => setAutofilledFields({}), 2000);
   };
@@ -261,6 +315,13 @@ export default function Checkout() {
 
   // Premium UPI payment success simulator
   const simulatePaymentAndOrder = () => {
+    // Check if the shipping form is valid before initiating payment simulation
+    const form = document.querySelector('.checkout-layout');
+    if (form && !form.checkValidity()) {
+      form.reportValidity();
+      return;
+    }
+
     setPaymentLoading(true);
     setError('');
 
@@ -420,6 +481,20 @@ export default function Checkout() {
                   <label>Country</label>
                   <input required disabled value={address.country} />
                 </div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '1rem' }}>
+                <label>Phone Number (Mandatory)</label>
+                <input 
+                  required 
+                  type="tel"
+                  pattern="[6-9][0-9]{9}"
+                  title="Please enter a valid 10-digit Indian mobile number starting with 6-9"
+                  placeholder="10-digit mobile number" 
+                  className={autofilledFields.phone ? 'autofilled' : ''}
+                  value={address.phone} 
+                  onChange={(e) => setAddress({ ...address, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })} 
+                />
               </div>
             </div>
 

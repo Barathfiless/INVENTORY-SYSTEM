@@ -64,12 +64,12 @@ export default function Orders() {
     return (
       <>
         <ShopHeader />
-        <section className="container order-detail" style={{ maxWidth: '1000px' }}>
+        <section className="container order-detail" style={{ maxWidth: '100%', marginLeft: 0, paddingLeft: '1.5rem', paddingRight: '1.5rem', background: 'transparent', border: 'none', boxShadow: 'none' }}>
           <Link to="/orders" style={detailStyles.backLink}>
             <ArrowLeft size={16} /> <span>Back to Orders</span>
           </Link>
           
-          <div style={detailStyles.headerCard}>
+          <div style={{ ...detailStyles.headerCard, background: 'transparent', border: 'none', boxShadow: 'none', padding: '0.5rem 0', borderRadius: 0 }}>
             <div>
               <h1 style={detailStyles.orderTitle}>Order #{order._id.slice(-8).toUpperCase()}</h1>
               <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginTop: '0.4rem', fontSize: '0.88rem', color: 'var(--text-muted)' }}>
@@ -117,6 +117,23 @@ export default function Orders() {
                   </li>
                 ))}
               </ul>
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.92rem', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Items Subtotal:</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{formatCurrency(order.itemsPrice || (order.totalPrice - (order.taxPrice || 0) - (order.shippingPrice || 0)))}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Shipping & Handling:</span>
+                  <span style={{ fontWeight: 600, color: order.shippingPrice === 0 ? 'var(--success)' : 'var(--text-main)' }}>
+                    {order.shippingPrice === 0 ? 'FREE' : formatCurrency(order.shippingPrice)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Tax (18% GST):</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-main)' }}>{formatCurrency(order.taxPrice || 0)}</span>
+                </div>
+              </div>
+
               <div style={detailStyles.totalRow}>
                 <span>Order Total:</span>
                 <span>{formatCurrency(order.totalPrice)}</span>

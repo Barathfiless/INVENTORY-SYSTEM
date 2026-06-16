@@ -57,7 +57,7 @@ function formatTimeAgo(dateStr) {
   return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
 }
 
-export default function AdminHeader({ storeName, onEditStore, theme, onToggleTheme }) {
+export default function AdminHeader({ storeName, storeCity, onEditStore, theme, onToggleTheme }) {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -144,6 +144,11 @@ export default function AdminHeader({ storeName, onEditStore, theme, onToggleThe
             } else if (order.status === 'shipped') {
               title = 'Order Shipped';
               message = `Order #${shortId} has been shipped`;
+              tone = 'info';
+              icon = ShoppingCart;
+            } else if (order.status === 'out_for_delivery') {
+              title = 'Order Out for Delivery';
+              message = `Order #${shortId} is out for delivery`;
               tone = 'info';
               icon = ShoppingCart;
             } else if (order.status === 'delivered') {
@@ -287,7 +292,10 @@ export default function AdminHeader({ storeName, onEditStore, theme, onToggleThe
           </Link>
           <span className="vercel-separator">/</span>
           <div className="admin-store-select">
-            <span className="topbar-store-name">{storeName || 'My Store'}</span>
+            <span className="topbar-store-name">
+              {storeName || 'My Store'}
+              {storeCity ? ` (${storeCity})` : ''}
+            </span>
             <button
               type="button"
               className="topbar-store-edit-btn"

@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Product from '../models/Product.js';
 import Sale from '../models/Sale.js';
+import asyncHandler from '../middleware/asyncHandler.js';
 
 const calcPrices = (items) => {
   const itemsPrice = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
@@ -10,7 +11,7 @@ const calcPrices = (items) => {
   return { itemsPrice, shippingPrice, taxPrice, totalPrice };
 };
 
-export const createOrder = async (req, res) => {
+export const createOrder = asyncHandler(async (req, res) => {
   const { orderItems, shippingAddress, paymentMethod } = req.body;
   if (!orderItems?.length) {
     return res.status(400).json({ message: 'No order items' });
@@ -67,14 +68,14 @@ export const createOrder = async (req, res) => {
 
   const populated = await Order.findById(order._id).populate('user', 'name email');
   res.status(201).json(populated);
-};
+});
 
-export const getMyOrders = async (req, res) => {
+export const getMyOrders = asyncHandler(async (req, res) => {
   const orders = await Order.find({ user: req.user._id }).sort({ createdAt: -1 });
   res.json(orders);
-};
+});
 
-export const getOrderById = async (req, res) => {
+export const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id).populate('user', 'name email');
   if (!order) return res.status(404).json({ message: 'Order not found' });
   if (req.user.role !== 'admin' && order.user._id.toString() !== req.user._id.toString()) {
@@ -107,9 +108,9 @@ export const getOrderById = async (req, res) => {
   }
 
   res.json(order);
-};
+});
 
-export const getAllOrders = async (req, res) => {
+export const getAllOrders = asyncHandler(async (req, res) => {
   const myProducts = await Product.find({ createdBy: req.user._id }).select('_id');
   const myProductIds = myProducts.map(p => p._id.toString());
 
@@ -132,9 +133,9 @@ export const getAllOrders = async (req, res) => {
   });
 
   res.json(filteredOrders);
-};
+});
 
-export const updateOrderStatus = async (req, res) => {
+export const updateOrderStatus = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
   if (!order) return res.status(404).json({ message: 'Order not found' });
   order.status = req.body.status || order.status;
@@ -149,38 +150,33 @@ export const updateOrderStatus = async (req, res) => {
   }
   const updated = await order.save();
   res.json(updated);
-};
+});
 
-export const cancelMyOrder = async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ message: 'Order not found' });
+export const cancelMyOrder = asyncHandler(async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ message: 'Order not found' });
 
-    // Ownership check
-    if (order.user.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to cancel this order' });
-    }
-
-    // Status check
-    if (order.status !== 'pending' && order.status !== 'processing') {
-      return res.status(400).json({ message: 'Order cannot be cancelled. Already shipped or delivered.' });
-    }
-
-    order.status = 'cancelled';
-
-    // Revert product stocks
-    for (const item of order.orderItems) {
-      const product = await Product.findById(item.product);
-      if (product) {
-        product.stock += item.quantity;
-        await product.save();
-      }
-    }
-
-    const updated = await order.save();
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: err.message || 'Cancellation failed' });
+  // Ownership check
+  if (order.user.toString() !== req.user._id.toString()) {
+    return res.status(403).json({ message: 'Not authorized to cancel this order' });
   }
-};
 
+  // Status check
+  if (order.status !== 'pending' && order.status !== 'processing') {
+    return res.status(400).json({ message: 'Order cannot be cancelled. Already shipped or delivered.' });
+  }
+
+  order.status = 'cancelled';
+
+  // Revert product stocks
+  for (const item of order.orderItems) {
+    const product = await Product.findById(item.product);
+    if (product) {
+      product.stock += item.quantity;
+      await product.save();
+    }
+  }
+
+  const updated = await order.save();
+  res.json(updated);
+});

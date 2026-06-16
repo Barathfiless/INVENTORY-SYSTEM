@@ -22,6 +22,7 @@ function OrderStatusSelect({ value, onChange }) {
     { value: 'pending', label: 'Pending' },
     { value: 'processing', label: 'Processing' },
     { value: 'shipped', label: 'Shipped' },
+    { value: 'out_for_delivery', label: 'Out for Delivery' },
     { value: 'delivered', label: 'Delivered' },
     { value: 'cancelled', label: 'Cancelled' }
   ];
@@ -209,6 +210,7 @@ export default function AdminOrders() {
       pending: 'status-pending',
       processing: 'status-processing',
       shipped: 'status-shipped',
+      out_for_delivery: 'status-out-for-delivery',
       delivered: 'status-delivered',
       cancelled: 'status-cancelled',
     };
@@ -303,6 +305,7 @@ export default function AdminOrders() {
                     <button className={`dropdown-item ${filterStatus === 'pending' ? 'selected' : ''}`} onClick={() => handleStatusFilterChange('pending')}>Pending</button>
                     <button className={`dropdown-item ${filterStatus === 'processing' ? 'selected' : ''}`} onClick={() => handleStatusFilterChange('processing')}>Processing</button>
                     <button className={`dropdown-item ${filterStatus === 'shipped' ? 'selected' : ''}`} onClick={() => handleStatusFilterChange('shipped')}>Shipped</button>
+                    <button className={`dropdown-item ${filterStatus === 'out_for_delivery' ? 'selected' : ''}`} onClick={() => handleStatusFilterChange('out_for_delivery')}>Out for Delivery</button>
                     <button className={`dropdown-item ${filterStatus === 'delivered' ? 'selected' : ''}`} onClick={() => handleStatusFilterChange('delivered')}>Delivered</button>
                     <button className={`dropdown-item ${filterStatus === 'cancelled' ? 'selected' : ''}`} onClick={() => handleStatusFilterChange('cancelled')}>Cancelled</button>
                   </div>
@@ -564,7 +567,7 @@ export default function AdminOrders() {
                       fontSize: '0.8rem',
                       fontWeight: '600'
                     }}>
-                      {selectedOrder.isPaid ? 'Paid' : 'Unpaid'}
+                      {selectedOrder.isPaid ? 'Paid' : (selectedOrder.paymentMethod === 'COD' ? 'COD' : 'Unpaid')}
                     </span>
                   </div>
                 </div>

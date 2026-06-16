@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ShopHeader from '../../components/ShopHeader';
+import CustomSelect from '../../components/CustomSelect';
 import { productAPI } from '../../api/api';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
@@ -81,6 +82,7 @@ export default function ProductDetail() {
     );
   }
 
+  const storeName = product.createdBy?.name || product.brand || 'StockSync';
   const brandName = product.brand || 'StockSync';
 
   // Same delivery estimation logic as ProductCard
@@ -97,13 +99,15 @@ export default function ProductDetail() {
   const options = { weekday: 'long', month: 'long', day: 'numeric' };
   const formattedDate = targetDate.toLocaleDateString('en-US', options);
 
-  // Mock list of gallery images (4 thumbnails total using crops to simulate alternate views)
-  const galleryImages = [
-    product.image || 'https://via.placeholder.com/500',
-    product.image || 'https://via.placeholder.com/500',
-    product.image || 'https://via.placeholder.com/500',
-    product.image || 'https://via.placeholder.com/500',
-  ];
+  // List of gallery images (using saved product images array when present, falling back to primary image crops/duplicates)
+  const galleryImages = product.images && product.images.length > 0 
+    ? product.images 
+    : [
+        product.image || 'https://via.placeholder.com/500',
+        product.image || 'https://via.placeholder.com/500',
+        product.image || 'https://via.placeholder.com/500',
+        product.image || 'https://via.placeholder.com/500',
+      ];
 
   const handleInlineLocationSubmit = async (e) => {
     e.preventDefault();
@@ -289,6 +293,15 @@ export default function ProductDetail() {
               </div>
               <p className="tax-label">Inclusive of all taxes</p>
             </div>
+            
+            <hr className="amazon-divider" />
+            
+            <div className="product-description-wrap" style={{ margin: '1.25rem 0' }}>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.5rem' }}>Product Description</h4>
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', lineHeight: '1.5', margin: 0 }}>
+                {product.description}
+              </p>
+            </div>
           </div>
 
           {/* Column 3: Buy Box Sidebar */}
@@ -369,15 +382,13 @@ export default function ProductDetail() {
               <div className="buybox-actions">
                 <div className="qty-row">
                   <label htmlFor="qty-select">Qty:</label>
-                  <select 
-                    id="qty-select" 
-                    value={qty} 
-                    onChange={(e) => setQty(Number(e.target.value))}
-                  >
-                    {[...Array(Math.min(10, product.stock))].map((_, i) => (
-                      <option key={i + 1} value={i + 1}>{i + 1}</option>
-                    ))}
-                  </select>
+                  <CustomSelect
+                    options={[...Array(Math.min(10, product.stock))].map((_, i) => String(i + 1))}
+                    value={String(qty)}
+                    onChange={(val) => setQty(Number(val))}
+                    placeholder="1"
+                    id="qty-select"
+                  />
                 </div>
 
                 <button
@@ -416,7 +427,7 @@ export default function ProductDetail() {
                 </tr>
                 <tr>
                   <td className="label">Sold by</td>
-                  <td className="val">{brandName}</td>
+                  <td className="val">{storeName}</td>
                 </tr>
               </tbody>
             </table>
@@ -613,7 +624,7 @@ export default function ProductDetail() {
           <div className="about-section" style={{ margin: 0 }}>
             <h3 className="section-subtitle">About this item</h3>
             <ul className="bullets-list">
-              {product.description.split('.').map((s, idx) => {
+              {(product.about || product.description).split('.').map((s, idx) => {
                 const cleaned = s.trim();
                 if (!cleaned) return null;
                 return <li key={idx}>{cleaned}.</li>;

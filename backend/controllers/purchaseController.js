@@ -1,8 +1,9 @@
 import Purchase from '../models/Purchase.js';
 import Product from '../models/Product.js';
 import User from '../models/User.js';
+import asyncHandler from '../middleware/asyncHandler.js';
 
-export const getPurchases = async (req, res) => {
+export const getPurchases = asyncHandler(async (req, res) => {
   const { startDate, endDate } = req.query;
   const filter = { createdBy: req.user._id };
   if (startDate || endDate) {
@@ -15,9 +16,9 @@ export const getPurchases = async (req, res) => {
     .populate('createdBy', 'name')
     .sort({ createdAt: -1 });
   res.json(purchases);
-};
+});
 
-export const createPurchase = async (req, res) => {
+export const createPurchase = asyncHandler(async (req, res) => {
   const { productId, quantity, unitCost, supplier, invoiceNumber, notes } = req.body;
   const product = await Product.findOne({ _id: productId, createdBy: req.user._id });
   if (!product) return res.status(404).json({ message: 'Product not found or not authorized' });
@@ -42,44 +43,40 @@ export const createPurchase = async (req, res) => {
     .populate('product', 'name sku stock')
     .populate('createdBy', 'name');
   res.status(201).json(populated);
-};
+});
 
-export const deletePurchase = async (req, res) => {
-  try {
-    const { password } = req.body;
-    
-    // Verify password
-    if (!password) {
-      return res.status(400).json({ message: 'Password is required' });
-    }
-
-    // Get the current user and check password
-    const user = await User.findById(req.user._id).select('+password');
-    const isPasswordValid = await user.matchPassword(password);
-    
-    if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Invalid password' });
-    }
-
-    // Find and delete the purchase
-    const purchase = await Purchase.findOne({ _id: req.params.id, createdBy: req.user._id });
-    if (!purchase) {
-      return res.status(404).json({ message: 'Purchase not found or not authorized' });
-    }
-
-    // Update product stock (reduce by purchase quantity)
-    const product = await Product.findOne({ _id: purchase.product, createdBy: req.user._id });
-    if (product) {
-      product.stock -= purchase.quantity;
-      if (product.stock < 0) product.stock = 0; // Prevent negative stock
-      await product.save();
-    }
-
-    // Delete the purchase
-    await Purchase.findOneAndDelete({ _id: req.params.id, createdBy: req.user._id });
-
-    res.json({ message: 'Purchase deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error', error: error.message });
+export const deletePurchase = asyncHandler(async (req, res) => {
+  const { password } = req.body;
+  
+  // Verify password
+  if (!password) {
+    return res.status(400).json({ message: 'Password is required' });
   }
-};
+
+  // Get the current user and check password
+  const user = await User.findById(req.user._id).select('+password');
+  const isPasswordValid = await user.matchPassword(password);
+  
+  if (!isPasswordValid) {
+    return res.status(401).json({ message: 'Invalid password' });
+  }
+
+  // Find and delete the purchase
+  const purchase = await Purchase.findOne({ _id: req.params.id, createdBy: req.user._id });
+  if (!purchase) {
+    return res.status(404).json({ message: 'Purchase not found or not authorized' });
+  }
+
+  // Update product stock (reduce by purchase quantity)
+  const product = await Product.findOne({ _id: purchase.product, createdBy: req.user._id });
+  if (product) {
+    product.stock -= purchase.quantity;
+    if (product.stock < 0) product.stock = 0; // Prevent negative stock
+    await product.save();
+  }
+
+  // Delete the purchase
+  await Purchase.findOneAndDelete({ _id: req.params.id, createdBy: req.user._id });
+
+  res.json({ message: 'Purchase deleted successfully' });
+});
