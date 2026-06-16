@@ -14,10 +14,14 @@ import {
   AlertTriangle,
   ShoppingCart,
   Pencil,
-  Store
+  Store,
+  Check,
+  Trash2,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { reportAPI, orderAPI } from '../api/api';
+import { reportAPI, orderAPI, productAPI } from '../api/api';
+import { formatCurrency } from '../utils/format';
 
 const navItems = [
   { path: '/admin', label: 'Dashboard', Icon: LayoutDashboard },
@@ -38,6 +42,19 @@ function getInitials(name) {
     .toUpperCase();
 }
 
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  const now = new Date();
+  const seconds = Math.floor((now - date) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return date.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' });
+}
+
 export default function AdminHeader({ storeName, onEditStore }) {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -45,6 +62,23 @@ export default function AdminHeader({ storeName, onEditStore }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  
+  const [readIds, setReadIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('stocksync_read_notifications') || '[]');
+    } catch {
+      return [];
+    }
+  });
+  
+  const [deletedIds, setDeletedIds] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('stocksync_deleted_notifications') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
   const notifRef = useRef(null);
   const profileRef = useRef(null);
 
@@ -52,45 +86,101 @@ export default function AdminHeader({ storeName, onEditStore }) {
     const load = async () => {
       const items = [];
       try {
-        const [{ data: stats }, { data: orders }] = await Promise.all([
-          reportAPI.getDashboard(),
+        const [{ data: stockData }, { data: orders }] = await Promise.all([
+          productAPI.getStock(),
           orderAPI.getAll(),
         ]);
 
-        if (stats.lowStockCount > 0) {
-          items.push({
-            id: 'low-stock',
-            title: 'Low stock alert',
-            message: `${stats.lowStockCount} product${stats.lowStockCount > 1 ? 's' : ''} below threshold`,
-            link: '/admin/stock',
-            Icon: AlertTriangle,
-            tone: 'warn',
+        // 1. Process individual low stock / out of stock items
+        if (stockData && stockData.products) {
+          stockData.products.forEach((p) => {
+            const isOut = p.stock === 0;
+            const isLow = p.stock > 0 && p.stock <= p.lowStockThreshold;
+            if (isOut || isLow) {
+              items.push({
+                id: `stock-${p._id}-${p.stock}`,
+                title: isOut ? 'Out of stock alert' : 'Low stock alert',
+                message: isOut 
+                  ? `${p.name} is completely out of stock` 
+                  : `${p.name} has only ${p.stock} units left`,
+                link: '/admin/stock',
+                Icon: AlertTriangle,
+                tone: 'warn',
+                timestamp: p.updatedAt || p.createdAt || new Date().toISOString(),
+              });
+            }
           });
         }
 
-        const pending = orders.filter((o) => o.status === 'pending' || o.status === 'processing');
-        if (pending.length > 0) {
-          items.push({
-            id: 'pending-orders',
-            title: 'Orders need attention',
-            message: `${pending.length} order${pending.length > 1 ? 's' : ''} pending or processing`,
-            link: '/admin/orders',
-            Icon: ShoppingCart,
-            tone: 'info',
+        // 2. Process e-commerce orders (take up to 15 latest orders)
+        if (orders && orders.length > 0) {
+          const sortedOrders = [...orders].sort(
+            (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt)
+          );
+          
+          const latestOrders = sortedOrders.slice(0, 15);
+          latestOrders.forEach((order) => {
+            const shortId = (order._id || '').slice(-8).toUpperCase();
+            const customerName = order.user?.name || 'Customer';
+            const price = formatCurrency(order.totalPrice);
+            
+            let title = 'Order Update';
+            let message = `Order #${shortId} status updated`;
+            let tone = 'info';
+            let icon = ShoppingCart;
+
+            if (order.status === 'pending') {
+              title = 'New Order Received';
+              message = `Order #${shortId} by ${customerName} is pending approval (${price})`;
+              tone = 'info';
+              icon = ShoppingCart;
+            } else if (order.status === 'processing') {
+              title = 'Order Processing';
+              message = `Order #${shortId} is now processing (${price})`;
+              tone = 'info';
+              icon = ShoppingCart;
+            } else if (order.status === 'shipped') {
+              title = 'Order Shipped';
+              message = `Order #${shortId} has been shipped`;
+              tone = 'info';
+              icon = ShoppingCart;
+            } else if (order.status === 'delivered') {
+              title = 'Order Delivered';
+              message = `Order #${shortId} was delivered successfully`;
+              tone = 'muted';
+              icon = Package;
+            } else if (order.status === 'cancelled') {
+              title = 'Order Cancelled';
+              message = `Order #${shortId} by ${customerName} was cancelled`;
+              tone = 'warn';
+              icon = AlertTriangle;
+            }
+
+            items.push({
+              id: `order-${order._id}-${order.status}`,
+              title,
+              message,
+              link: '/admin/orders',
+              Icon: icon,
+              tone,
+              timestamp: order.updatedAt || order.createdAt || new Date().toISOString(),
+            });
           });
         }
 
-        if (stats.orderCount > 0 && items.length === 0) {
+        // 3. Fallback if no notifications exist at all
+        if (items.length === 0) {
           items.push({
             id: 'orders-ok',
             title: 'All caught up',
-            message: 'No urgent inventory or order alerts',
+            message: 'No active stock alerts or order updates',
             link: '/admin/orders',
             Icon: Package,
             tone: 'muted',
+            timestamp: null,
           });
         }
-      } catch {
+      } catch (err) {
         items.push({
           id: 'error',
           title: 'Could not load alerts',
@@ -98,8 +188,17 @@ export default function AdminHeader({ storeName, onEditStore }) {
           link: null,
           Icon: AlertTriangle,
           tone: 'muted',
+          timestamp: null,
         });
       }
+
+      // Sort all notifications by timestamp descending (null timestamps go to the bottom)
+      items.sort((a, b) => {
+        if (!a.timestamp) return 1;
+        if (!b.timestamp) return -1;
+        return new Date(b.timestamp) - new Date(a.timestamp);
+      });
+
       setNotifications(items);
     };
     load();
@@ -123,7 +222,59 @@ export default function AdminHeader({ storeName, onEditStore }) {
     navigate('/');
   };
 
-  const unreadCount = notifications.filter((n) => n.tone !== 'muted').length;
+  const handleMarkAsRead = (id) => {
+    setReadIds((prev) => {
+      const next = [...new Set([...prev, id])];
+      localStorage.setItem('stocksync_read_notifications', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleMarkAllAsRead = () => {
+    const visibleUnreadIds = notifications
+      .filter((n) => !deletedIds.includes(n.id) && !readIds.includes(n.id) && n.id !== 'orders-ok' && n.id !== 'error')
+      .map((n) => n.id);
+    
+    if (visibleUnreadIds.length === 0) return;
+
+    setReadIds((prev) => {
+      const next = [...new Set([...prev, ...visibleUnreadIds])];
+      localStorage.setItem('stocksync_read_notifications', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleDeleteNotification = (id) => {
+    setDeletedIds((prev) => {
+      const next = [...new Set([...prev, id])];
+      localStorage.setItem('stocksync_deleted_notifications', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleDeleteAll = () => {
+    const visibleIds = notifications
+      .filter((n) => !deletedIds.includes(n.id) && n.id !== 'orders-ok' && n.id !== 'error')
+      .map((n) => n.id);
+    
+    if (visibleIds.length === 0) return;
+
+    setDeletedIds((prev) => {
+      const next = [...new Set([...prev, ...visibleIds])];
+      localStorage.setItem('stocksync_deleted_notifications', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const visibleNotifications = notifications.filter((n) => !deletedIds.includes(n.id));
+
+  const hasActiveNotifications = visibleNotifications.some(
+    (n) => n.id !== 'orders-ok' && n.id !== 'error'
+  );
+
+  const unreadCount = visibleNotifications.filter(
+    (n) => !readIds.includes(n.id) && n.id !== 'orders-ok' && n.id !== 'error'
+  ).length;
 
   return (
     <header className="admin-header-unified">
@@ -166,42 +317,113 @@ export default function AdminHeader({ storeName, onEditStore }) {
             {notificationsOpen && (
               <div className="admin-dropdown admin-dropdown--notifications">
                 <div className="admin-dropdown-header">
-                  <span>Notifications</span>
-                  {unreadCount > 0 && <span className="dropdown-count">{unreadCount} new</span>}
+                  <div className="notif-header-left">
+                    <span>Notifications</span>
+                    {unreadCount > 0 && <span className="dropdown-count">{unreadCount} new</span>}
+                  </div>
+                  {hasActiveNotifications && (
+                    <div className="notif-header-actions">
+                      {unreadCount > 0 && (
+                        <button
+                          type="button"
+                          className="notif-header-btn"
+                          onClick={handleMarkAllAsRead}
+                        >
+                          Mark all as read
+                        </button>
+                      )}
+                      {unreadCount > 0 && <span className="notif-header-sep">|</span>}
+                      <button
+                        type="button"
+                        className="notif-header-btn notif-header-btn--danger"
+                        onClick={handleDeleteAll}
+                      >
+                        Delete all
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <ul className="notification-list">
-                  {notifications.length === 0 ? (
+                  {visibleNotifications.length === 0 ? (
                     <li className="notification-empty">No notifications</li>
                   ) : (
-                    notifications.map(({ id, title, message, link, Icon, tone }) => (
-                      <li key={id}>
-                        {link ? (
-                          <Link
-                            to={link}
-                            className={`notification-item notification-item--${tone}`}
-                            onClick={() => setNotificationsOpen(false)}
-                          >
-                            <span className="notification-icon">
-                              <Icon size={16} />
-                            </span>
-                            <span>
-                              <strong>{title}</strong>
-                              <small>{message}</small>
-                            </span>
-                          </Link>
-                        ) : (
-                          <div className={`notification-item notification-item--${tone}`}>
-                            <span className="notification-icon">
-                              <Icon size={16} />
-                            </span>
-                            <span>
-                              <strong>{title}</strong>
-                              <small>{message}</small>
-                            </span>
+                    visibleNotifications.map(({ id, title, message, link, Icon, tone, timestamp }) => {
+                      const isRead = readIds.includes(id) || id === 'orders-ok' || id === 'error';
+                      return (
+                        <li key={id} className={`notification-row ${isRead ? 'read' : 'unread'}`}>
+                          {link ? (
+                            <Link
+                              to={link}
+                              className={`notification-item notification-item--${tone}`}
+                              onClick={() => setNotificationsOpen(false)}
+                            >
+                              <span className="notification-icon">
+                                <Icon size={16} />
+                              </span>
+                              <span className="notification-content">
+                                <strong>{title}</strong>
+                                <small>{message}</small>
+                                {timestamp && (
+                                  <span className="notification-time">
+                                    <Clock size={10} />
+                                    {formatTimeAgo(timestamp)}
+                                  </span>
+                                )}
+                              </span>
+                            </Link>
+                          ) : (
+                            <div className={`notification-item notification-item--${tone}`}>
+                              <span className="notification-icon">
+                                <Icon size={16} />
+                              </span>
+                              <span className="notification-content">
+                                <strong>{title}</strong>
+                                <small>{message}</small>
+                                {timestamp && (
+                                  <span className="notification-time">
+                                    <Clock size={10} />
+                                    {formatTimeAgo(timestamp)}
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {!isRead && <span className="unread-indicator-dot" />}
+
+                          <div className="notification-actions">
+                            {!isRead && (
+                              <button
+                                type="button"
+                                className="notif-action-btn notif-action-btn--read"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleMarkAsRead(id);
+                                }}
+                                title="Mark as read"
+                              >
+                                <Check size={12} />
+                              </button>
+                            )}
+                            {id !== 'orders-ok' && id !== 'error' && (
+                              <button
+                                type="button"
+                                className="notif-action-btn notif-action-btn--delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  handleDeleteNotification(id);
+                                }}
+                                title="Delete notification"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
                           </div>
-                        )}
-                      </li>
-                    ))
+                        </li>
+                      );
+                    })
                   )}
                 </ul>
               </div>
