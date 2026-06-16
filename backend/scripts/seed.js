@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-import User from '../models/User.js';
 import Product from '../models/Product.js';
 
 dotenv.config();
@@ -126,19 +125,11 @@ const seed = async () => {
   await mongoose.connect(uri);
   console.log('Connected to MongoDB');
 
-  await User.deleteMany({});
   await Product.deleteMany({});
-
-  await User.create([
-    { name: 'Admin User', email: 'admin@stocksync.com', password: 'admin123', role: 'admin' },
-    { name: 'John Customer', email: 'customer@stocksync.com', password: 'customer123', role: 'customer' },
-  ]);
 
   await Product.insertMany(products);
 
   console.log('Seed complete!');
-  console.log('Admin: admin@stocksync.com / admin123');
-  console.log('Customer: customer@stocksync.com / customer123');
   process.exit(0);
 };
 
